@@ -34,6 +34,19 @@
         <button id="refresh">Refresh</button>
     </div>
     <div>
+        <h3>Providers:</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Name</th>
+                    <th>ATR</th>
+                </tr>
+            </thead>
+            <tbody id="providers"></tbody>
+        </table>
+    </div>
+    <div>
         <h3>Items</h3>
         <table>
             <thead>
@@ -71,6 +84,7 @@
                                 console.error(err);
                                 alert("Cannot update list of providers.\nSee log for more details");
                             })
+                        FillProviders();
                     }, () => {
                         alert("PIN is not approved");
                     })
@@ -86,6 +100,7 @@
                         console.error(err);
                         alert("Cannot update list of providers.\nSee log for more details");
                     });
+                FillProviders();
             })
             .on("close", () => {
                 isOpen = false;
@@ -148,6 +163,24 @@
                 })
         }
 
+        function FillProviders() {
+            return Promise.resolve()
+                .then(() => {
+                    const $providers = $("providers");
+                    $providers.innerHTML = "";
+
+                    return ws.info()
+                        .then((info) => {
+                            for (const provider of info.providers) {
+                                $providers.appendChild(CreateProvidersRaw(provider));
+                            }
+                        })
+                })
+                .catch((error) => {
+                    console.error(error);
+                })
+        }
+
         function CreateRaw(item, index) {
             const $tr = document.createElement("tr");
             $tr.appendChild(CreateCell(index));
@@ -169,6 +202,14 @@
             const $td = document.createElement("td");
             $td.textContent = data;
             return $td;
+        }
+
+        function CreateProvidersRaw(item) {
+            const $tr = document.createElement("tr");
+            $tr.appendChild(CreateCell(item.id));
+            $tr.appendChild(CreateCell(item.name));
+            $tr.appendChild(CreateCell(item.atr || "none"));
+            return $tr;
         }
 
         $("provider").onchange = function () {
