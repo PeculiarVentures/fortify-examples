@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Example #4</title>
+    <script src="http://cdn.rawgit.com/dcodeIO/protobuf.js/6.6.0/dist/protobuf.js"></script>
+    <script src="http://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
+    <script src="http://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
+    <script src="src/asn1.min.js"></script>
+    <script src="src/pki.min.js"></script>
+    <script src="src/pvtsutils.js"></script>
+    <script src="src/helper.js"></script>
+    <style>
+        th {
+            text-align: left;
+        }
+
+        td {
+            padding: 2px 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Provider items receiving</h2>
+    <p></p>
+    <div>
+        <h3>1: Select provider:</h3>
+        <select name="provider" id="provider" style="width: 300px">
+        </select>
+        <button id="refresh">Refresh</button>
+    </div>
+    <div>
+        <h3>Items</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Index</th>
+                    <th>Type</th>
+                    <th>Name</th>
+                </tr>
+            </thead>
+            <tbody id="items"></tbody>
+        </table>
+    </div>
+    <script>
+        const ws = new WebcryptoSocket.SocketProvider();
+        let isOpen = false;
+        ws.connect("127.0.0.1:8080")
+            .on("error", (e) => {
+                console.error(e.error);
+            })
+            .on("listening", (e) => {
+                // Check if end-to-end session is approved
+                ws.isLoggedIn()
+                    .then((ok) => {
+                        console.log("Session approved:", ok);
+                        if (!ok) {
+                            // ask to approve session
+                            return ws.login();
+                        }
+                    })
+                    .then(() => {
+                        isOpen = true;
+
+                        FillProviderSelectEx($("provider"))
+                            .catch((err) => {
+                                console.error(err);
+                                alert("Cannot update list of providers.\nSee log for more details");
+                            })
+                    }, () => {
+                        alert("PIN is not approved");
+                    })
+            })
+            .on("token", () => {
+                console.log("TOKEN");
+                // update provider list
+                const $provider = document.getElementById("provider");
+
+                $provider.innerHTML = "";
+                FillProviderSelectEx($("provider"))
+                    .catch((err) => {
+                        console.error(err);
+                        alert("Cannot update list of providers.\nSee log for more details");
+                    });
+            })
+            .on("close", () => {
+                isOpen = false;
+            });
+
+        function FillProviderSelectEx(domSelect) {
+            return FillProviderSelect(domSelect)
+                .then(() => {
+                    return FillItems(domSelect.value);
+                })
+        }
+
+        function FillItems(providerId) {
+            const $items = $("items");
+            // clear table items
+            $items.innerHTML = "";
+
+            // get crypto for selected provider
+            return ws.getCrypto(providerId)
+                .then((crypto) => {
+                    if (!crypto) {
+                        throw new Error(`Cannot get provider by id '${providerId}'`);
+                    }
+                    // Check provider login
+                    return crypto.isLoggedIn()
+                        .then((ok) => {
+                            if (!ok) {
+                                // Request provider for PIN window
+                                return crypto.login();
+                            }
+                        })
+                        .then(() => {
+                            // Get certificate items
+                            return crypto.certStorage.keys();
+                        })
+                        .then((indexes) => {
+                            const promises = indexes.map((index) => {
+                                return crypto.certStorage.getItem(index)
+                                    .then((item) => {
+                                        const $raw = CreateRaw(item, index);
+                                        $items.appendChild($raw);
+                                    });
+                            })
+                            return Promise.all(promises);
+                        })
+                        .then(() => {
+                            // Get key items
+                            return crypto.keyStorage.keys();
+                        })
+                        .then((indexes) => {
+                            const promises = indexes.map((index) => {
+                                return crypto.keyStorage.getItem(index)
+                                    .then((item) => {
+                                        const $raw = CreateRaw(item, index);
+                                        $items.appendChild($raw);
+                                    });
+                            })
+                            return Promise.all(promises);
+                        })
+                })
+        }
+
+        function CreateRaw(item, index) {
+            const $tr = document.createElement("tr");
+            $tr.appendChild(CreateCell(index));
+            $tr.appendChild(CreateCell(item.type));
+            switch (item.type) {
+                case "public":
+                case "private":
+                    $tr.appendChild(CreateCell(item.algorithm.name));
+                    break;
+                case "x509":
+                case "request":
+                    $tr.appendChild(CreateCell(GetCommonName(item.subjectName)));
+                    break;
+            }
+            return $tr;
+        }
+
+        function CreateCell(data) {
+            const $td = document.createElement("td");
+            $td.textContent = data;
+            return $td;
+        }
+
+        $("provider").onchange = function () {
+            FillItems($("provider").value)
+                .catch((err) => {
+                    console.error(err);
+                    alert("Cannot update list of provider items");
+                })
+        }
+        $("refresh").onclick = function () {
+            // get crypto for selected provider
+            return ws.getCrypto($("provider").value)
+                .then((crypto) => {
+                    if (!crypto) {
+                        throw new Error(`Cannot get provider by id '${providerId}'`);
+                    }
+                    return crypto.reset();
+                })
+                .then(() => {
+                    return FillItems($("provider").value)
+                })
+                .catch((err) => {
+                    console.error(err);
+                    alert("Cannot update list of provider items");
+                })
+        }
+    </script>
+</body>
+
+</html>

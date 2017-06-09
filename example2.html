@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Example #2</title>
+    <script src="http://cdn.rawgit.com/dcodeIO/protobuf.js/6.6.0/dist/protobuf.js"></script>
+    <script src="http://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
+    <script src="http://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
+    <script src="src/asn1.min.js"></script>
+    <script src="src/pki.min.js"></script>
+    <script src="src/pvtsutils.js"></script>
+    <script src="src/helper.js"></script>
+</head>
+
+<body>
+    <h2>Certificate importing</h2>
+    <p>Example descryption</p>
+    <div>
+        <h3>1: Select provider:</h3>
+        <select name="provider" id="provider" style="width: 300px">
+        </select>
+    </div>
+    <div>
+        <h3>2: Insert certificate PEM:</h3>
+        <textarea name="cert" id="cert" cols="100" rows="10"></textarea>
+    </div>
+    <div>
+        <h3>3: Start script</h3>
+        <button id="btn" onclick="start()">Start</button>
+    </div>
+    <script>
+        const ws = new WebcryptoSocket.SocketProvider();
+        let isOpen = false;
+        ws.connect("127.0.0.1:8080")
+            .on("error", (e) => {
+                console.error(e.error);
+            })
+            .on("listening", (e) => {
+                // Check if end-to-end session is approved
+                ws.isLoggedIn()
+                    .then((ok) => {
+                        console.log("Session approved:", ok);
+                        if (!ok) {
+                            // ask to approve session
+                            return ws.login();
+                        }
+                    })
+                    .then(() => {
+                        isOpen = true;
+
+                        FillProviderSelect($("provider"))
+                            .catch((err) => {
+                                console.error(err);
+                                alert("Cannot update list of providers.\nSee log for more details");
+                            })
+                    }, () => {
+                        alert("PIN is not approved");
+                    })
+            })
+            .on("token", () => {
+                console.log("TOKEN");
+                // update provider list
+                const $provider = document.getElementById("provider");
+
+                $provider.innerHTML = "";
+                FillProviderSelect($("provider"))
+                    .catch((err) => {
+                        console.error(err);
+                        alert("Cannot update list of providers.\nSee log for more details");
+                    });
+            })
+            .on("close", () => {
+                isOpen = false;
+            });
+
+        function start() {
+            if (isOpen) {
+                Promise.resolve()
+                    .then(() => {
+                        // disabled button
+                        $("btn").disabled = true;
+
+                        const $provider = document.getElementById("provider");
+                        const $cert = $("cert");
+
+                        if (!$cert.value) {
+                            throw new Error("Certificate PEM is empty");
+                        }
+
+                        return ws.getCrypto(providerId)
+                            .then((crypto) => {
+                                if (!crypto) {
+                                    throw new Error(`Cannot get provider by id '${providerId}'`);
+                                }
+                                // Check provider login
+                                return crypto.isLoggedIn()
+                                    .then((ok) => {
+                                        if (!ok) {
+                                            // Request provider for PIN window
+                                            return crypto.login();
+                                        }
+                                    })
+                                    .then(() => {
+                                        const der = PemToDer($cert.value);
+
+                                        // get algorithm for key
+                                        // NOTE: pkijs needs crypto engine
+                                        pkijs.setEngine("Fortify", crypto, crypto.subtle);
+                                        var asn1 = asn1js.fromBER(der);
+                                        asn1Cert = new pkijs.Certificate({ schema: asn1.result });
+                                        return asn1Cert.getPublicKey()
+                                            .then((key) => {
+                                                return crypto.certStorage.importCert("x509", der, key.algorithm, ["verify"])
+                                            })
+                                            .then((cert) => {
+                                                // Add certificate to storage
+                                                return crypto.certStorage.setItem(cert)
+                                            })
+                                            .then((index) => {
+                                                alert("Certificate was added successfully");
+                                                console.log("Certificate id:", index);
+                                            })
+                                    })
+                            })
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                        alert(`Cannot import certificate.\nSee log for more details`);
+                    })
+                    .then(() => {
+                        $("btn").disabled = false;
+                    });
+            } else {
+                alert("Server is not runned");
+            }
+        }
+    </script>
+</body>
+
+</html>

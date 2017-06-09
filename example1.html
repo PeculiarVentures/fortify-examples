@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Example #1</title>
+    <script src="http://cdn.rawgit.com/dcodeIO/protobuf.js/6.6.0/dist/protobuf.js"></script>
+    <script src="http://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
+    <script src="http://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
+    <script src="src/asn1.min.js"></script>
+    <script src="src/pki.min.js"></script>
+    <script src="src/pvtsutils.js"></script>
+    <script src="src/helper.js"></script>
+</head>
+
+<body>
+    <h2>Certificate request generation</h2>
+    <p>Example descryption</p>
+    <div>
+        <h3>1: Select provider:</h3>
+        <select name="provider" id="provider" style="width: 300px">
+        </select>
+    </div>
+    <div>
+        <h3>2: Request CommonName</h3>
+        <input id="cn" type="text" value="Test request">
+    </div>
+    <div>
+        <h3>3: Start script</h3>
+        <button id="btn" onclick="start()">Start</button>
+    </div>
+    <script>
+        const ws = new WebcryptoSocket.SocketProvider();
+        let isOpen = false;
+        ws.connect("127.0.0.1:8080")
+            .on("error", (e) => {
+                console.error(e.error);
+            })
+            .on("listening", (e) => {
+                // Check if end-to-end session is approved
+                ws.isLoggedIn()
+                    .then((ok) => {
+                        console.log("Session approved:", ok);
+                        if (!ok) {
+                            // ask to approve session
+                            return ws.login();
+                        }
+                    })
+                    .then(() => {
+                        isOpen = true;
+
+                        FillProviderSelect($("provider"))
+                            .catch((err) => {
+                                console.error(err);
+                                alert("Cannot get list of providers.\nSee log for more details");
+                            })
+                    }, () => {
+                        alert("PIN is not approved");
+                    })
+            })
+            .on("token", () => {
+                // refresh list of providers
+                const $provider = $("provider");
+                $provider.innerHTML = "";
+                FillProviderSelect($provider)
+                    .catch((err) => {
+                        console.error(err);
+                        alert("Cannot update list of providers.\nSee log for more details");
+                    })
+            })
+            .on("close", () => {
+                isOpen = false;
+            });
+
+        function start() {
+            if (isOpen) {
+                Promise.resolve()
+                    .then(() => {
+                        // Block button
+                        $("btn").disabled = true;
+                        // Get info about allowed providers
+                        const providerId = $("provider").value;
+                        return ws.getCrypto(providerId)
+                            .then((crypto) => {
+                                if (!crypto) {
+                                    throw new Error(`Cannot get provider by id '${providerId}'`);
+                                }
+                                // Check provider login
+                                return crypto.isLoggedIn()
+                                    .then((ok) => {
+                                        if (!ok) {
+                                            // Request provider for PIN window
+                                            return crypto.login();
+                                        }
+                                    })
+                                    .then(() => {
+                                        // Generate new key pair
+                                        const alg = {
+                                            name: "RSASSA-PKCS1-v1_5",
+                                            hash: "SHA-256",
+                                            publicExponent: new Uint8Array([1, 0, 1]),
+                                            modulusLength: 2048,
+                                        };
+                                        return crypto.subtle.generateKey(alg, false, ["sign", "verify"])
+                                            .then((keys) => {
+                                                // Generate new request
+                                                // NOTE: pkijs needs crypto engine
+                                                pkijs.setEngine("Fortify", crypto, crypto.subtle);
+
+                                                const request = new pkijs.CertificationRequest();
+
+                                                // Fill certificate properties
+                                                request.version = 0;
+                                                request.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                                                    type: "2.5.4.6", // Country name
+                                                    value: new asn1js.PrintableString({ value: "EN" }),
+                                                }));
+                                                const cn = $("cn").value;
+                                                if (!cn) {
+                                                    throw new Error("CommonName is empty");
+                                                }
+                                                request.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                                                    type: "2.5.4.3", // Common name
+                                                    value: new asn1js.BmpString({ value: cn }),
+                                                }));
+
+                                                return Promise.resolve()
+                                                    .then(() => {
+                                                        console.log(keys.publicKey);
+                                                        return request.subjectPublicKeyInfo.importKey(keys.publicKey);
+                                                    })
+                                                    .then(() => {
+                                                        return request.sign(keys.privateKey, "SHA-256");
+                                                    })
+                                                    .then(() => {
+                                                        // Convert request to DER
+                                                        const derRequest = request.toSchema(true).toBER(false);
+                                                        const base64 = DerToPem(derRequest, "CERTIFICATE REQUEST");
+                                                        console.log(base64);
+                                                        // import key to crypto
+                                                        return crypto.certStorage.importCert("request", derRequest, alg, ["sign", "verify"]);
+                                                    })
+                                                    .then((req) => {
+                                                        // add keys and request to storage
+                                                        return Promise.resolve()
+                                                            .then(() => {
+                                                                return crypto.keyStorage.setItem(keys.privateKey)
+                                                            })
+                                                            .then((index) => {
+                                                                privateKeyIndex = index;
+                                                                return crypto.keyStorage.setItem(keys.publicKey)
+                                                            })
+                                                            .then((index) => {
+                                                                publicKeyIndex = index;
+                                                                return crypto.certStorage.setItem(req)
+                                                            })
+                                                            .then((index) => {
+                                                                certIndex = index;
+                                                                const message = "Request was generated successfuly.\nIndex of request is " + index;
+                                                                console.log(message);
+                                                                alert(message);
+                                                            })
+                                                    })
+                                            })
+                                    });
+                            })
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                        alert(`Cannot generate certificate request.\nSee log for more details`);
+                    })
+                    .then(() => {
+                        $("btn").disabled = false;
+                    })
+            } else {
+                alert("Server is not runned");
+            }
+        }
+    </script>
+</body>
+
+</html>

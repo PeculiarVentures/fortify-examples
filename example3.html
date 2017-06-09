@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Example #3</title>
+    <script src="http://cdn.rawgit.com/dcodeIO/protobuf.js/6.6.0/dist/protobuf.js"></script>
+    <script src="http://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
+    <script src="http://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
+    <script src="src/asn1.min.js"></script>
+    <script src="src/pki.min.js"></script>
+    <script src="src/pvtsutils.js"></script>
+    <script src="src/helper.js"></script>
+</head>
+
+<body>
+    <h2>Self-signed certificate generation</h2>
+    <p>Creates self-signed certificate and puts it to selected provider</p>
+    <div>
+        <h3>1: Select provider:</h3>
+        <select name="provider" id="provider" style="width: 300px">
+        </select>
+    </div>
+    <div>
+        <h3>2: Request CommonName</h3>
+        <input id="cn" type="text" value="Test certificate">
+    </div>
+    <div>
+        <h3>3: Start script</h3>
+        <button id="btn" onclick="start()">Start</button>
+    </div>
+    <script>
+        const ws = new WebcryptoSocket.SocketProvider();
+        let isOpen = false;
+        ws.connect("127.0.0.1:8080")
+            .on("error", (e) => {
+                console.error(e.error);
+            })
+            .on("listening", (e) => {
+                // Check if end-to-end session is approved
+                ws.isLoggedIn()
+                    .then((ok) => {
+                        console.log("Session approved:", ok);
+                        if (!ok) {
+                            // ask to approve session
+                            return ws.login();
+                        }
+                    })
+                    .then(() => {
+                        isOpen = true;
+
+                        FillProviderSelect($("provider"))
+                            .catch((err) => {
+                                console.error(err);
+                                alert("Cannot update list of providers.\nSee log for more details");
+                            })
+                    }, () => {
+                        alert("PIN is not approved");
+                    })
+            })
+            .on("token", () => {
+                console.log("TOKEN");
+                // update provider list
+                const $provider = document.getElementById("provider");
+
+                $provider.innerHTML = "";
+                FillProviderSelect($("provider"))
+                    .catch((err) => {
+                        console.error(err);
+                        alert("Cannot update list of providers.\nSee log for more details");
+                    });
+            })
+            .on("close", () => {
+                isOpen = false;
+            });
+
+        function start() {
+            if (isOpen) {
+                Promise.resolve()
+                    .then(() => {
+                        // Disable button
+                        $("btn").disabled = true;
+
+                        const providerId = $("provider").value;
+
+                        return ws.getCrypto(providerId)
+                            .then((crypto) => {
+                                if (!crypto) {
+                                    throw new Error(`Cannot get provider by id '${providerId}'`);
+                                }
+                                // init alg for crypto operations
+                                const alg = {
+                                    name: "RSASSA-PKCS1-v1_5",
+                                    hash: "SHA-256",
+                                    publicExponent: new Uint8Array([1, 0, 1]),
+                                    modulusLength: 2048,
+                                };
+                                // Check provider login
+                                return crypto.isLoggedIn()
+                                    .then((ok) => {
+                                        if (!ok) {
+                                            // Request provider for PIN window
+                                            return crypto.login();
+                                        }
+                                    })
+                                    .then(() => {
+                                        // Generate new key pair
+                                        return crypto.subtle.generateKey(alg, false, ["sign", "verify"])
+                                    })
+                                    .then((keys) => {
+                                        // Generate new certificate
+                                        // NOTE: pkijs needs crypto engine
+                                        pkijs.setEngine("Fortify", crypto, crypto.subtle);
+                                        const certificate = new pkijs.Certificate();
+
+                                        const cn = $("cn").value;
+                                        if (!cn) {
+                                            throw new Error("CommonName is empty");
+                                        }
+
+                                        certificate.version = 2;
+                                        certificate.serialNumber = new asn1js.Integer({ value: 1 });
+                                        certificate.issuer.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                                            type: "2.5.4.6", // Country name
+                                            value: new asn1js.PrintableString({ value: "EN" })
+                                        }));
+                                        certificate.issuer.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                                            type: "2.5.4.3", // Common name
+                                            value: new asn1js.BmpString({ value: cn })
+                                        }));
+                                        certificate.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                                            type: "2.5.4.6", // Country name
+                                            value: new asn1js.PrintableString({ value: "EN" })
+                                        }));
+                                        certificate.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
+                                            type: "2.5.4.3", // Common name
+                                            value: new asn1js.BmpString({ value: cn })
+                                        }));
+
+                                        certificate.notBefore.value = new Date();
+                                        certificate.notAfter.value = new Date();
+                                        certificate.notAfter.value.setFullYear(certificate.notAfter.value.getFullYear() + 1);
+
+                                        certificate.extensions = []; // Extensions are not a part of certificate by default, it's an optional array
+                                        return Promise.resolve()
+                                            .then(() => {
+                                                return certificate.subjectPublicKeyInfo.importKey(keys.publicKey);
+                                            })
+                                            .then(() => {
+                                                return certificate.sign(keys.privateKey, "SHA-256");
+                                            })
+                                            .then(() => {
+                                                // Convert certificate to DER
+                                                const derCert = certificate.toSchema(true).toBER(false);
+                                                const pem = DerToPem(derCert, "CERTIFICATE");
+                                                console.log(pem);
+                                                // import key to crypto
+                                                return crypto.certStorage.importCert("x509", derCert, alg, ["sign", "verify"]);
+                                            })
+                                            .then((cert) => {
+                                                // add keys and cert to storage
+                                                return Promise.resolve()
+                                                    .then((index) => {
+                                                        publicKeyIndex = index;
+                                                        return crypto.certStorage.setItem(cert)
+                                                    })
+                                                    .then(() => {
+                                                        return crypto.keyStorage.setItem(keys.privateKey)
+                                                    })
+                                                    .then((index) => {
+                                                        privateKeyIndex = index;
+                                                        return crypto.keyStorage.setItem(keys.publicKey)
+                                                    })
+                                                    .then((index) => {
+                                                        const message = "Certificate was generated successfuly.\nIndex of request is " + index;
+                                                        console.log(message);
+                                                        alert(message);
+                                                    })
+                                            })
+                                    })
+                            })
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                        alert(`Cannot create self-signed certificate.\nSee log for more details`);
+                    })
+                    .then(() => {
+                        $("btn").disabled = false;
+                    });
+            } else {
+                alert("Server is not runned");
+            }
+        }
+    </script>
+</body>
+
+</html>
