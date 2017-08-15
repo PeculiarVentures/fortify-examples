@@ -65,8 +65,8 @@
         </table>
     </div>
     <script>
-        const ws = new WebcryptoSocket.SocketProvider();
-        let isOpen = false;
+        var ws = new WebcryptoSocket.SocketProvider();
+        var isOpen = false;
         ws.connect("127.0.0.1:31337")
             .on("error", function(e) {
                 console.error(e);
@@ -97,7 +97,7 @@
             .on("token", function() {
                 console.log("TOKEN");
                 // update provider list
-                const $provider = document.getElementById("provider");
+                var $provider = document.getElementById("provider");
 
                 $provider.innerHTML = "";
                 FillProviderSelectEx($("provider"))
@@ -119,7 +119,7 @@
         }
 
         function FillItems(providerId) {
-            const $items = $("items");
+            var $items = $("items");
             // clear table items
             $items.innerHTML = "";
 
@@ -142,10 +142,10 @@
                             return crypto.certStorage.keys();
                         })
                         .then(function(indexes) {
-                            const promises = indexes.map(function(index) {
+                            var promises = indexes.map(function(index) {
                                 return crypto.certStorage.getItem(index)
                                     .then(function(item) {
-                                        const $raw = CreateRaw(item, index);
+                                        var $raw = CreateRaw(item, index);
                                         $items.appendChild($raw);
                                     });
                             })
@@ -156,10 +156,10 @@
                             return crypto.keyStorage.keys();
                         })
                         .then(function(indexes) {
-                            const promises = indexes.map(function(index) {
+                            var promises = indexes.map(function(index) {
                                 return crypto.keyStorage.getItem(index)
                                     .then(function(item) {
-                                        const $raw = CreateRaw(item, index);
+                                        var $raw = CreateRaw(item, index);
                                         $items.appendChild($raw);
                                     });
                             })
@@ -171,12 +171,13 @@
         function FillProviders() {
             return Promise.resolve()
                 .then(function() {
-                    const $providers = $("providers");
+                    var $providers = $("providers");
                     $providers.innerHTML = "";
 
                     return ws.info()
                         .then(function(info) {
-                            for (const provider of info.providers) {
+                            for (var i=0; i < info.providers.length; i++) {
+                                var provider = info.providers[i];
                                 $providers.appendChild(CreateProvidersRaw(provider));
                             }
                         })
@@ -187,7 +188,7 @@
         }
 
         function CreateRaw(item, index) {
-            const $tr = document.createElement("tr");
+            var $tr = document.createElement("tr");
             $tr.appendChild(CreateCell(index));
             $tr.appendChild(CreateCell(item.type));
             switch (item.type) {
@@ -204,13 +205,13 @@
         }
 
         function CreateCell(data) {
-            const $td = document.createElement("td");
+            var $td = document.createElement("td");
             $td.textContent = data;
             return $td;
         }
 
         function CreateProvidersRaw(item) {
-            const $tr = document.createElement("tr");
+            var $tr = document.createElement("tr");
             $tr.appendChild(CreateCell(item.id));
             $tr.appendChild(CreateCell(item.name));
             $tr.appendChild(CreateCell(item.atr || "none"));
