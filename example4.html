@@ -125,40 +125,40 @@
 
             // get crypto for selected provider
             return ws.getCrypto(providerId)
-                .then((crypto) => {
+                .then(function(crypto) {
                     if (!crypto) {
                         throw new Error(`Cannot get provider by id '${providerId}'`);
                     }
                     // Check provider login
                     return crypto.isLoggedIn()
-                        .then((ok) => {
+                        .then(function(ok) {
                             if (!ok) {
                                 // Request provider for PIN window
                                 return crypto.login();
                             }
                         })
-                        .then(() => {
+                        .then(function() {
                             // Get certificate items
                             return crypto.certStorage.keys();
                         })
-                        .then((indexes) => {
-                            const promises = indexes.map((index) => {
+                        .then(function(indexes) {
+                            const promises = indexes.map(function(index) {
                                 return crypto.certStorage.getItem(index)
-                                    .then((item) => {
+                                    .then(function(item) {
                                         const $raw = CreateRaw(item, index);
                                         $items.appendChild($raw);
                                     });
                             })
                             return Promise.all(promises);
                         })
-                        .then(() => {
+                        .then(function() {
                             // Get key items
                             return crypto.keyStorage.keys();
                         })
-                        .then((indexes) => {
-                            const promises = indexes.map((index) => {
+                        .then(function(indexes) {
+                            const promises = indexes.map(function(index) {
                                 return crypto.keyStorage.getItem(index)
-                                    .then((item) => {
+                                    .then(function(item) {
                                         const $raw = CreateRaw(item, index);
                                         $items.appendChild($raw);
                                     });
@@ -170,18 +170,18 @@
 
         function FillProviders() {
             return Promise.resolve()
-                .then(() => {
+                .then(function() {
                     const $providers = $("providers");
                     $providers.innerHTML = "";
 
                     return ws.info()
-                        .then((info) => {
+                        .then(function(info) {
                             for (const provider of info.providers) {
                                 $providers.appendChild(CreateProvidersRaw(provider));
                             }
                         })
                 })
-                .catch((error) => {
+                .catch(function(error) {
                     console.error(error);
                 })
         }
@@ -219,7 +219,7 @@
 
         $("provider").onchange = function () {
             FillItems($("provider").value)
-                .catch((err) => {
+                .catch(function(err) {
                     console.error(err);
                     alert("Cannot update list of provider items");
                 })
@@ -227,16 +227,16 @@
         $("refresh").onclick = function () {
             // get crypto for selected provider
             return ws.getCrypto($("provider").value)
-                .then((crypto) => {
+                .then(function(crypto) {
                     if (!crypto) {
                         throw new Error(`Cannot get provider by id '${providerId}'`);
                     }
                     return crypto.reset();
                 })
-                .then(() => {
+                .then(function() {
                     return FillItems($("provider").value)
                 })
-                .catch((err) => {
+                .catch(function(err) {
                     console.error(err);
                     alert("Cannot update list of provider items");
                 })
