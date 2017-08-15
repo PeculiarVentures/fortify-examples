@@ -68,52 +68,52 @@
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
         ws.connect("127.0.0.1:31337")
-            .on("error", (e) => {
+            .on("error", function(e) {
                 console.error(e);
             })
-            .on("listening", (e) => {
+            .on("listening", function(e) {
                 // Check if end-to-end session is approved
                 ws.isLoggedIn()
-                    .then((ok) => {
+                    .then(function(ok) {
                         console.log("Session approved:", ok);
                         if (!ok) {
                             // ask to approve session
                             return ws.login();
                         }
                     })
-                    .then(() => {
+                    .then(function() {
                         isOpen = true;
 
                         FillProviderSelectEx($("provider"))
-                            .catch((err) => {
+                            .catch(function(err) {
                                 console.error(err);
                                 alert("Cannot update list of providers.\nSee log for more details");
                             })
                         FillProviders();
-                    }, () => {
+                    }, function() {
                         alert("PIN is not approved");
                     })
             })
-            .on("token", () => {
+            .on("token", function() {
                 console.log("TOKEN");
                 // update provider list
                 const $provider = document.getElementById("provider");
 
                 $provider.innerHTML = "";
                 FillProviderSelectEx($("provider"))
-                    .catch((err) => {
+                    .catch(function(err) {
                         console.error(err);
                         alert("Cannot update list of providers.\nSee log for more details");
                     });
                 FillProviders();
             })
-            .on("close", () => {
+            .on("close", function() {
                 isOpen = false;
             });
 
         function FillProviderSelectEx(domSelect) {
             return FillProviderSelect(domSelect)
-                .then(() => {
+                .then(function() {
                     return FillItems(domSelect.value);
                 })
         }
