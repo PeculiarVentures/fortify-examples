@@ -69,7 +69,7 @@
         let isOpen = false;
         ws.connect("127.0.0.1:31337")
             .on("error", (e) => {
-                console.error(e.error);
+                console.error(e);
             })
             .on("listening", (e) => {
                 // Check if end-to-end session is approved
