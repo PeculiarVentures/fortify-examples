@@ -127,7 +127,7 @@
             return ws.getCrypto(providerId)
                 .then(function(crypto) {
                     if (!crypto) {
-                        throw new Error(`Cannot get provider by id '${providerId}'`);
+                        throw new Error("Cannot get provider by id '" + providerId + "'");
                     }
                     // Check provider login
                     return crypto.isLoggedIn()
@@ -229,7 +229,7 @@
             return ws.getCrypto($("provider").value)
                 .then(function(crypto) {
                     if (!crypto) {
-                        throw new Error(`Cannot get provider by id '${providerId}'`);
+                        throw new Error("Cannot get provider by id '" + providerId + "'");
                     }
                     return crypto.reset();
                 })
