@@ -7,7 +7,7 @@
 function $(id) {
     const result = document.getElementById(id);
     if (!result) {
-        throw new Error(`Cannot get element by id '${id}'`);
+        throw new Error("Cannot get element by id '" + id + "'");
     }
     return result;
 }
@@ -53,13 +53,13 @@ function DerToPem(buffer, name) {
     let base64 = pvtsutils.Convert.ToBase64(buffer);
 
     const res = [];
-    res.push(`-----BEGIN ${name.toUpperCase()}-----`);
+    res.push("-----BEGIN " + name.toUpperCase() + "-----");
     while (base64.length > 64) {
         res.push(base64.substr(0, 64))
         base64 = base64.substr(64);
     }
     res.push(base64);
-    res.push(`-----END ${name.toUpperCase()}-----`);
+    res.push("-----END " + name.toUpperCase() + "-----");
     return res.join("\r\n");
 }
 
