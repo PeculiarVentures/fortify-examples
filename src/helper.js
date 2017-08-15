@@ -21,9 +21,9 @@ function $(id) {
  */
 function FillProviderSelect(domSelect) {
     return Promise.resolve()
-        .then(() => {
+        .then(function() {
             return ws.info()
-                .then((info) => {
+                .then(function(info) {
                     for (let i = 0; i < info.providers.length; i++) {
                         const provider = info.providers[i];
                         // TODO: check provider.atr to filter pkcs#11 modules
