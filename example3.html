@@ -76,6 +76,20 @@
                 isOpen = false;
             });
 
+        function fixDN(name) {
+            if (name.typesAndValues) {
+                const schema = (new asn1js.Sequence({
+                    value: Array.from(name.typesAndValues, function (element){ 
+                        return new asn1js.Set({
+                            value: [element.toSchema()]
+                        })
+                    })
+                }));
+                const der = schema.toBER()
+                name.fromSchema(asn1js.fromBER(der).result);
+            }
+        }
+
         function start() {
             if (isOpen) {
                 Promise.resolve()
@@ -138,6 +152,9 @@
                                             type: "2.5.4.3", // Common name
                                             value: new asn1js.BmpString({ value: cn })
                                         }));
+
+                                        fixDN(certificate.subject);
+                                        fixDN(certificate.issuer);
 
                                         certificate.notBefore.value = new Date();
                                         certificate.notAfter.value = new Date();

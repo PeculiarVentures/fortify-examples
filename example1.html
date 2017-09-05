@@ -34,6 +34,21 @@
     <script>
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
+
+        function fixDN(name) {
+            if (name.typesAndValues) {
+                const schema = (new asn1js.Sequence({
+                    value: Array.from(name.typesAndValues, function (element){ 
+                        return new asn1js.Set({
+                            value: [element.toSchema()]
+                        })
+                    })
+                }));
+                const der = schema.toBER()
+                name.fromSchema(asn1js.fromBER(der).result);
+            }
+        }
+
         ws.connect("127.0.0.1:31337")
             .on("error", function (e) {
                 console.error(e.error);
@@ -137,6 +152,8 @@
                                                     type: "2.5.4.3", // Common name
                                                     value: new asn1js.BmpString({ value: cn }),
                                                 }));
+
+                                                fixDN(request.subject);
 
                                                 return Promise.resolve()
                                                     .then(function () {
