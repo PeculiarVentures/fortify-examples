@@ -6,8 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Example #1</title>
-    <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.6.0/dist/protobuf.js"></script>
+    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/promise.js"></script>
+    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/es5-shim.min.js"></script>
+    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/webcrypto-liner.min.js"></script>
+    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
+    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
+    <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
     <script src="https://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
+    <script src="https://min.gitcdn.link/repo/undoZen/fetch/master/fetch.js"></script>
     <script src="https://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
     <script src="src/asn1.min.js"></script>
     <script src="src/pki.min.js"></script>
@@ -112,7 +118,7 @@
                         return ws.getCrypto(providerId)
                             .then(function (crypto) {
                                 if (!crypto) {
-                                    throw new Error(`Cannot get provider by id '${providerId}'`);
+                                    throw new Error("Cannot get provider by id '" + providerId + "'");
                                 }
                                 // Check provider login
                                 return crypto.isLoggedIn()
@@ -198,7 +204,7 @@
                     })
                     .catch(function (err) {
                         console.error(err);
-                        alert(`Cannot generate certificate request.\nSee log for more details`);
+                        alert("Cannot generate certificate request.\nSee log for more details");
                     })
                     .then(function () {
                         $("btn").disabled = false;
