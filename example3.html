@@ -35,58 +35,58 @@
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
         ws.connect("127.0.0.1:8080")
-            .on("error", (e) => {
+            .on("error", function (e) {
                 console.error(e.error);
             })
-            .on("listening", (e) => {
+            .on("listening", function (e) {
                 // Check if end-to-end session is approved
                 ws.isLoggedIn()
-                    .then((ok) => {
+                    .then(function (ok) {
                         console.log("Session approved:", ok);
                         if (!ok) {
                             // ask to approve session
                             return ws.login();
                         }
                     })
-                    .then(() => {
+                    .then(function () {
                         isOpen = true;
 
                         FillProviderSelect($("provider"))
-                            .catch((err) => {
+                            .catch(function (err) {
                                 console.error(err);
                                 alert("Cannot update list of providers.\nSee log for more details");
                             })
-                    }, () => {
+                    }, function () {
                         alert("PIN is not approved");
                     })
             })
-            .on("token", () => {
+            .on("token", function () {
                 console.log("TOKEN");
                 // update provider list
                 const $provider = document.getElementById("provider");
 
                 $provider.innerHTML = "";
                 FillProviderSelect($("provider"))
-                    .catch((err) => {
+                    .catch(function (err) {
                         console.error(err);
                         alert("Cannot update list of providers.\nSee log for more details");
                     });
             })
-            .on("close", () => {
+            .on("close", function () {
                 isOpen = false;
             });
 
         function start() {
             if (isOpen) {
                 Promise.resolve()
-                    .then(() => {
+                    .then(function () {
                         // Disable button
                         $("btn").disabled = true;
 
                         const providerId = $("provider").value;
 
                         return ws.getCrypto(providerId)
-                            .then((crypto) => {
+                            .then(function (crypto) {
                                 if (!crypto) {
                                     throw new Error(`Cannot get provider by id '${providerId}'`);
                                 }
@@ -99,17 +99,17 @@
                                 };
                                 // Check provider login
                                 return crypto.isLoggedIn()
-                                    .then((ok) => {
+                                    .then(function (ok) {
                                         if (!ok) {
                                             // Request provider for PIN window
                                             return crypto.login();
                                         }
                                     })
-                                    .then(() => {
+                                    .then(function () {
                                         // Generate new key pair
                                         return crypto.subtle.generateKey(alg, false, ["sign", "verify"])
                                     })
-                                    .then((keys) => {
+                                    .then(function (keys) {
                                         // Generate new certificate
                                         // NOTE: pkijs needs crypto engine
                                         pkijs.setEngine("Fortify", crypto, crypto.subtle);
@@ -145,13 +145,13 @@
 
                                         certificate.extensions = []; // Extensions are not a part of certificate by default, it's an optional array
                                         return Promise.resolve()
-                                            .then(() => {
+                                            .then(function () {
                                                 return certificate.subjectPublicKeyInfo.importKey(keys.publicKey);
                                             })
-                                            .then(() => {
+                                            .then(function () {
                                                 return certificate.sign(keys.privateKey, "SHA-256");
                                             })
-                                            .then(() => {
+                                            .then(function () {
                                                 // Convert certificate to DER
                                                 const derCert = certificate.toSchema(true).toBER(false);
                                                 const pem = DerToPem(derCert, "CERTIFICATE");
@@ -159,21 +159,21 @@
                                                 // import key to crypto
                                                 return crypto.certStorage.importCert("x509", derCert, alg, ["sign", "verify"]);
                                             })
-                                            .then((cert) => {
+                                            .then(function (cert) {
                                                 // add keys and cert to storage
                                                 return Promise.resolve()
-                                                    .then((index) => {
+                                                    .then(function (index) {
                                                         publicKeyIndex = index;
                                                         return crypto.certStorage.setItem(cert)
                                                     })
-                                                    .then(() => {
+                                                    .then(function () {
                                                         return crypto.keyStorage.setItem(keys.privateKey)
                                                     })
-                                                    .then((index) => {
+                                                    .then(function (index) {
                                                         privateKeyIndex = index;
                                                         return crypto.keyStorage.setItem(keys.publicKey)
                                                     })
-                                                    .then((index) => {
+                                                    .then(function (index) {
                                                         const message = "Certificate was generated successfuly.\nIndex of request is " + index;
                                                         console.log(message);
                                                         alert(message);
@@ -182,11 +182,11 @@
                                     })
                             })
                     })
-                    .catch((err) => {
+                    .catch(function (err) {
                         console.error(err);
                         alert(`Cannot create self-signed certificate.\nSee log for more details`);
                     })
-                    .then(() => {
+                    .then(function () {
                         $("btn").disabled = false;
                     });
             } else {

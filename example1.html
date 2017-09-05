@@ -35,79 +35,79 @@
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
         ws.connect("127.0.0.1:8080")
-            .on("error", (e) => {
+            .on("error", function (e) {
                 console.error(e.error);
             })
-            .on("listening", (e) => {
+            .on("listening", function (e) {
                 // Check if end-to-end session is approved
                 ws.isLoggedIn()
-                    .then((ok) => {
+                    .then(function (ok) {
                         console.log("Session approved:", ok);
                         if (!ok) {
                             return ws.challenge()
-                                .then((pin) => {
+                                .then(function (pin) {
                                     // show PIN
-                                    setTimeout(() => {
+                                    setTimeout(function () {
                                         alert("2key session PIN:" + pin);
                                     }, 100)
                                     // ask to approve session
                                     return ws.login();
                                 })
-                                .then(() => {
+                                .then(function () {
                                     // PIN approved
-                                }, () => {
+                                }, function () {
                                     // PIN refused
                                 })
                         }
                     })
-                    .then(() => {
+                    .then(function () {
                         isOpen = true;
 
                         FillProviderSelect($("provider"))
-                            .catch((err) => {
+                            .catch(function (err) {
                                 console.error(err);
                                 alert("Cannot get list of providers.\nSee log for more details");
                             })
-                    }, () => {
+                    }, function () {
                         alert("PIN is not approved");
                     })
             })
-            .on("token", () => {
+            .on("token", function () {
                 // refresh list of providers
                 const $provider = $("provider");
                 $provider.innerHTML = "";
                 FillProviderSelect($provider)
-                    .catch((err) => {
+                    .catch(function (err) {
                         console.error(err);
                         alert("Cannot update list of providers.\nSee log for more details");
                     })
             })
-            .on("close", () => {
+            .on("close", function () {
                 isOpen = false;
             });
 
         function start() {
             if (isOpen) {
                 Promise.resolve()
-                    .then(() => {
+                    .then(function () {
                         // Block button
                         $("btn").disabled = true;
                         // Get info about allowed providers
                         const providerId = $("provider").value;
                         return ws.getCrypto(providerId)
-                            .then((crypto) => {
+                            .then(function (crypto) {
                                 if (!crypto) {
                                     throw new Error(`Cannot get provider by id '${providerId}'`);
                                 }
                                 // Check provider login
                                 return crypto.isLoggedIn()
-                                    .then((ok) => {
+                                    .then(function (ok) {
                                         if (!ok) {
                                             // Request provider for PIN window
                                             return crypto.login();
                                         }
                                     })
-                                    .then(() => {
+                                    .then(function () {
                                         // Generate new key pair
                                         const alg = {
                                             name: "RSASSA-PKCS1-v1_5",
@@ -116,7 +116,7 @@
                                             modulusLength: 2048,
                                         };
                                         return crypto.subtle.generateKey(alg, false, ["sign", "verify"])
-                                            .then((keys) => {
+                                            .then(function (keys) {
                                                 // Generate new request
                                                 // NOTE: pkijs needs crypto engine
                                                 pkijs.setEngine("Fortify", crypto, crypto.subtle);
@@ -139,14 +139,14 @@
                                                 }));
 
                                                 return Promise.resolve()
-                                                    .then(() => {
+                                                    .then(function () {
                                                         console.log(keys.publicKey);
                                                         return request.subjectPublicKeyInfo.importKey(keys.publicKey);
                                                     })
-                                                    .then(() => {
+                                                    .then(function () {
                                                         return request.sign(keys.privateKey, "SHA-256");
                                                     })
-                                                    .then(() => {
+                                                    .then(function () {
                                                         // Convert request to DER
                                                         const derRequest = request.toSchema(true).toBER(false);
                                                         const base64 = DerToPem(derRequest, "CERTIFICATE REQUEST");
@@ -154,21 +154,21 @@
                                                         // import key to crypto
                                                         return crypto.certStorage.importCert("request", derRequest, alg, ["sign", "verify"]);
                                                     })
-                                                    .then((req) => {
+                                                    .then(function (req) {
                                                         // add keys and request to storage
                                                         return Promise.resolve()
-                                                            .then(() => {
+                                                            .then(function () {
                                                                 return crypto.keyStorage.setItem(keys.privateKey)
                                                             })
-                                                            .then((index) => {
+                                                            .then(function (index) {
                                                                 privateKeyIndex = index;
                                                                 return crypto.keyStorage.setItem(keys.publicKey)
                                                             })
-                                                            .then((index) => {
+                                                            .then(function (index) {
                                                                 publicKeyIndex = index;
                                                                 return crypto.certStorage.setItem(req)
                                                             })
-                                                            .then((index) => {
+                                                            .then(function (index) {
                                                                 certIndex = index;
                                                                 const message = "Request was generated successfuly.\nIndex of request is " + index;
                                                                 console.log(message);
@@ -179,11 +179,11 @@
                                     });
                             })
                     })
-                    .catch((err) => {
+                    .catch(function (err) {
                         console.error(err);
                         alert(`Cannot generate certificate request.\nSee log for more details`);
                     })
-                    .then(() => {
+                    .then(function () {
                         $("btn").disabled = false;
                     })
             } else {
