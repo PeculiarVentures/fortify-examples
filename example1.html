@@ -34,7 +34,7 @@
     <script>
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
-        ws.connect("127.0.0.1:8080")
+        ws.connect("127.0.0.1:31337")
             .on("error", function (e) {
                 console.error(e.error);
             })
