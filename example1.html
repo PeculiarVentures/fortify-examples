@@ -41,6 +41,12 @@
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
 
+        if (!Array.prototype.from) {
+            Array.prototype.from = function from(array, cb) {
+                return array.map(cb);
+            }
+        }
+
         function fixDN(name) {
             if (name.typesAndValues) {
                 const schema = (new asn1js.Sequence({
