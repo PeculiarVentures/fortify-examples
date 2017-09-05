@@ -85,7 +85,7 @@
         function fixDN(name) {
             if (name.typesAndValues) {
                 const schema = (new asn1js.Sequence({
-                    value: Array.from(name.typesAndValues, function (element){ 
+                    value: name.typesAndValues.map(function (element){ 
                         return new asn1js.Set({
                             value: [element.toSchema()]
                         })
