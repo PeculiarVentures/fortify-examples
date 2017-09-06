@@ -42,26 +42,6 @@
         const ws = new WebcryptoSocket.SocketProvider();
         let isOpen = false;
 
-        if (!Array.prototype.from) {
-            Array.prototype.from = function from(array, cb) {
-                return array.map(cb);
-            }
-        }
-
-        function fixDN(name) {
-            if (name.typesAndValues) {
-                const schema = (new asn1js.Sequence({
-                    value: name.typesAndValues.map(function (element){ 
-                        return new asn1js.Set({
-                            value: [element.toSchema()]
-                        })
-                    })
-                }));
-                const der = schema.toBER()
-                name.fromSchema(asn1js.fromBER(der).result);
-            }
-        }
-
         ws.connect("127.0.0.1:31337")
             .on("error", function (e) {
                 console.error(e.error);

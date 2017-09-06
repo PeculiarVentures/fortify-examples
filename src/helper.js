@@ -86,3 +86,22 @@ function GetCommonName(name) {
     const res = reg.exec(name);
     return  res ? res[1] : "Unknown";
 }
+
+/**
+ * Fix RDNs for PKIjs.
+ * `RDNs = [RDN[attr],RDN[attr],...]`
+ * @param {any} name 
+ */
+function fixDN(name) {
+    if (name.typesAndValues) {
+        const schema = (new asn1js.Sequence({
+            value: name.typesAndValues.map(function (element){ 
+                return new asn1js.Set({
+                    value: [element.toSchema()]
+                })
+            })
+        }));
+        const der = schema.toBER()
+        name.fromSchema(asn1js.fromBER(der).result);
+    }
+}
