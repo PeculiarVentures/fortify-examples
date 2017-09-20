@@ -96,7 +96,6 @@
                         FillProviderSelectEx($("provider"))
                             .catch(function (err) {
                                 console.error(err);
-                                alert("Cannot update list of providers.\nSee log for more details");
                             })
                         FillProviders();
                     }, function () {
@@ -112,7 +111,6 @@
                 FillProviderSelectEx($("provider"))
                     .catch(function (err) {
                         console.error(err);
-                        alert("Cannot update list of providers.\nSee log for more details");
                     });
                 FillProviders();
             })
