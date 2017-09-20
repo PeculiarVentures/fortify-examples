@@ -51,8 +51,15 @@
                     .then(function (ok) {
                         console.log("Session approved:", ok);
                         if (!ok) {
-                            // ask to approve session
-                            return ws.login();
+                            return ws.challenge()
+                                .then(function (pin) {
+                                    // show PIN
+                                    setTimeout(function () {
+                                        alert("2key session PIN:" + pin);
+                                    }, 100)
+                                    // ask to approve session
+                                    return ws.login();
+                                });
                         }
                     })
                     .then(function () {

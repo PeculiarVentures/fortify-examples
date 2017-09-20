@@ -60,12 +60,7 @@
                                     }, 100)
                                     // ask to approve session
                                     return ws.login();
-                                })
-                                .then(function () {
-                                    // PIN approved
-                                }, function () {
-                                    // PIN refused
-                                })
+                                });
                         }
                     })
                     .then(function () {
@@ -111,8 +106,12 @@
                                 return crypto.isLoggedIn()
                                     .then(function (ok) {
                                         if (!ok) {
-                                            // Request provider for PIN window
-                                            return crypto.login();
+                                            // ask to approve session and show PIN to console
+                                            return ws.challenge()
+                                                .then(function(pin){
+                                                    console.log("\n\nPIN:", pin, "\n\n");
+                                                    return ws.login();
+                                                });
                                         }
                                     })
                                     .then(function () {

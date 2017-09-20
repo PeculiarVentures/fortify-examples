@@ -100,14 +100,27 @@
                         return ws.getCrypto(providerId)
                             .then(function (crypto) {
                                 if (!crypto) {
-                                    throw new Error("Cannot get provider by id '"+providerId+"'");
+                                    throw new Error("Cannot get provider by id '" + providerId + "'");
                                 }
                                 // Check provider login
                                 return crypto.isLoggedIn()
                                     .then(function (ok) {
                                         if (!ok) {
-                                            // Request provider for PIN window
-                                            return crypto.login();
+                                            return ws.challenge()
+                                                .then(function (pin) {
+                                                    // show PIN
+                                                    setTimeout(function () {
+                                                        alert("2key session PIN:" + pin);
+                                                    }, 100)
+                                                    // ask to approve session
+                                                    return ws.login();
+                                                })
+                                                .then(function () {
+                                                    // PIN approved
+                                                }, function () {
+                                                    // PIN refused
+                                                    alert("PIN is not approved");
+                                                })
                                         }
                                     })
                                     .then(function () {
