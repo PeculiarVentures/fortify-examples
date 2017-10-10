@@ -154,12 +154,6 @@
                                     .then(function (item) {
                                         var $raw = CreateRaw(item, index);
                                         $items.appendChild($raw);
-                                        if (item.type === "request") {
-                                            crypto.certStorage.exportCert("pem", item)
-                                                .then((pem) => {
-                                                    console.log(pem);
-                                                });
-                                        }
                                     }, function(error) {
                                         console.error(error);
                                     });
