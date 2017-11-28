@@ -204,6 +204,16 @@ function GetCertificateKey(type, provider, certID) {
                 }
             }
             return null;
+        })
+        .then(function (key) {
+            if (key || type !== "public") {
+                return key;
+            }
+
+            return provider.certStorage.getItem(certID)
+                .then(function(cert) {
+                    return cert.publicKey;
+                });
         });
 }
 
