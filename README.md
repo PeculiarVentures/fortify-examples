@@ -11,3 +11,6 @@ Fortify enables web applications to use smart cards, local certificate stores an
 | [Create a self signed certificate](https://peculiarventures.github.io/fortify-examples/example3.html) |
 | [Provider enumeration](https://peculiarventures.github.io/fortify-examples/example4.html) |
 | [Signing](https://peculiarventures.github.io/fortify-examples/example5.html) |
+
+## Thanks
+Thanks to the [CA Security Council](https://casecurity.org/) for their support of this project and the many individuals from [Twitter](https://twitter.com/rmhrisk) who provided feedback and testing.
