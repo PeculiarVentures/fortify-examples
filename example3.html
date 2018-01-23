@@ -179,16 +179,16 @@
                                             .then(function (cert) {
                                                 // add keys and cert to storage
                                                 return Promise.resolve()
-                                                    .then(function (index) {
-                                                        publicKeyIndex = index;
-                                                        return crypto.certStorage.setItem(cert)
-                                                    })
                                                     .then(function () {
                                                         return crypto.keyStorage.setItem(keys.privateKey)
                                                     })
                                                     .then(function (index) {
                                                         privateKeyIndex = index;
                                                         return crypto.keyStorage.setItem(keys.publicKey)
+                                                    })
+                                                    .then(function (index) {
+                                                        publicKeyIndex = index;
+                                                        return crypto.certStorage.setItem(cert)
                                                     })
                                                     .then(function (index) {
                                                         const message = "Certificate was generated successfuly.\nIndex of request is " + index;
