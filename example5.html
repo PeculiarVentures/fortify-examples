@@ -141,8 +141,18 @@
                 });
         }
 
-        $("sign").onclick = function () {
+        var $sign = $("sign");
+        var $signature = $("signature");
+        var $verification = $("verification");
+
+        $sign.onclick = function () {
             var provider;
+
+            $sign.disabled = true;
+
+            // Clear fields
+            $signature.value = "";
+            $verification.textContent = "";
 
             Promise.resolve()
                 .then(function () {
@@ -181,6 +191,9 @@
                             console.error(err);
                             alert(err.message);
                         });
+                })
+                .then(function () {
+                    $sign.disabled = false;
                 })
         }
     </script>
