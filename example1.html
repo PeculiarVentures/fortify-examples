@@ -74,19 +74,23 @@
                         alert("PIN is not approved");
                     })
             })
-            .on("token", function () {
-                // refresh list of providers
-                const $provider = $("provider");
-                $provider.innerHTML = "";
-                FillProviderSelect($provider)
-                    .catch(function (err) {
-                        console.error(err);
-                        alert("Cannot update list of providers.\nSee log for more details");
-                    })
-            })
             .on("close", function () {
                 isOpen = false;
             });
+
+        ws.cardReader
+            .on("insert", updateProvider)
+            .on("remove", updateProvider);
+
+        function updateProvider() {
+            const $provider = $("provider");
+            $provider.innerHTML = "";
+            FillProviderSelect($provider)
+                .catch(function (err) {
+                    console.error(err);
+                    alert("Cannot update list of providers.\nSee log for more details");
+                })
+        }
 
         function start() {
             if (isOpen) {
@@ -107,7 +111,7 @@
                                         if (!ok) {
                                             // ask to approve session and show PIN to console
                                             return ws.challenge()
-                                                .then(function(pin){
+                                                .then(function (pin) {
                                                     console.log("\n\nPIN:", pin, "\n\n");
                                                     return ws.login();
                                                 });
