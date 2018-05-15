@@ -81,21 +81,23 @@
                         alert("PIN is not approved");
                     })
             })
-            .on("token", function () {
-                console.log("TOKEN");
-                // update provider list
-                const $provider = document.getElementById("provider");
-
-                $provider.innerHTML = "";
-                FillProviderSelect($("provider"))
-                    .catch(function (err) {
-                        console.error(err);
-                        alert("Cannot update list of providers.\nSee log for more details");
-                    });
-            })
             .on("close", function () {
                 isOpen = false;
             });
+
+        ws.cardReader
+            .on("insert", updateProvider)
+            .on("remove", updateProvider);
+
+        function updateProvider() {
+            const $provider = $("provider");
+            $provider.innerHTML = "";
+            FillProviderSelect($provider)
+                .catch(function (err) {
+                    console.error(err);
+                    alert("Cannot update list of providers.\nSee log for more details");
+                })
+        }
 
         function start() {
             if (isOpen) {

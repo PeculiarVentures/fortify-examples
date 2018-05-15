@@ -101,14 +101,21 @@
             .on("token", function () {
                 console.log("TOKEN");
                 // update provider list
-                var $providers = document.getElementById("providers");
-
-                $providers.innerHTML = "";
-                FillData()
             })
             .on("close", function () {
                 isOpen = false;
             });
+            
+        ws.cardReader
+            .on("insert", updateProvider)
+            .on("remove", updateProvider);
+
+        function updateProvider() {
+            var $providers = document.getElementById("providers");
+
+            $providers.innerHTML = "";
+            FillData();
+        }
 
         function FillData() {
             Promise.resolve()
