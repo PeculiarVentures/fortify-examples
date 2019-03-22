@@ -1,2 +1,4 @@
 src/pki.js
 src/asn1.js
+
+.DS_Store

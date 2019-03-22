@@ -2,163 +2,114 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Example #2</title>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/promise.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/es5-shim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.26.0/polyfill.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/webcrypto-liner.min.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
-    <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
-    <script src="https://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
-    <script src="https://min.gitcdn.link/repo/undoZen/fetch/master/fetch.js"></script>
-    <script src="https://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
-    <script src="src/asn1.min.js"></script>
-    <script src="src/pki.min.js"></script>
-    <script src="src/pvtsutils.js"></script>
-    <script src="src/helper.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Example #2</title>
+  <!-- Crypto -->
+  <script src="src/webcrypto-liner.shim.js"></script>
+  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
+  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
+
+  <!-- Webcrypto Socket -->
+  <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
+  <script src="src/webcrypto-socket.js"></script>
+
+  <!-- Helpers -->
+  <script src="src/pvtsutils.js"></script>
+  <script src="src/asn1.min.js"></script>
+  <script src="src/pki.min.js"></script>
+  <script src="src/helper.js"></script>
 </head>
 
 <body>
-    <h2>Importing a Certificate</h2>
-    <div>
-        <h3>1: Select provider:</h3>
-        <select name="provider" id="provider" style="width: 300px">
-        </select>
-    </div>
-    <div>
-        <h3>2: Insert certificate PEM:</h3>
-        <textarea name="cert" id="cert" cols="100" rows="10"></textarea>
-    </div>
-    <div>
-        <h3>3: Create</h3>
-        <button id="btn" onclick="start()">Start</button>
-    </div>
-    <script>
-        const ws = new WebcryptoSocket.SocketProvider();
-        let isOpen = false;
-        ws.connect("127.0.0.1:31337")
-            .on("error", function (e) {
-                console.error(e.error);
-            })
-            .on("listening", function (e) {
-                // Check if end-to-end session is approved
-                ws.isLoggedIn()
-                    .then(function (ok) {
-                        console.log("Session approved:", ok);
-                        if (!ok) {
-                            // ask to approve session
-                            return ws.login();
-                        }
-                    })
-                    .then(function () {
-                        isOpen = true;
+  <h2>Importing a Certificate</h2>
+  <div>
+    <h3>1: Select provider:</h3>
+    <select name="provider" id="provider" style="width: 300px">
+    </select>
+  </div>
+  <div>
+    <h3>2: Insert certificate PEM:</h3>
+    <textarea name="cert" id="cert" cols="100" rows="10"></textarea>
+  </div>
+  <div>
+    <h3>3: Create</h3>
+    <button id="btn" onclick="start()">Start</button>
+  </div>
+  <script>
+    async function main() {
+      self.ws = new WebcryptoSocket.SocketProvider({
+        storage: await WebcryptoSocket.BrowserStorage.create(),
+      });
+      ws.connect("127.0.0.1:31337")
+        .on("error", function (e) {
+          console.error(e);
+        })
+        .on("listening", async (e) => {
+          // Check if end-to-end session is approved
+          if (! await ws.isLoggedIn()) {
+            const pin = await ws.challenge();
+            // show PIN
+            setTimeout(() => {
+              alert("2key session PIN:" + pin);
+            }, 100)
+            // ask to approve session
+            await ws.login();
+          }
 
-                        FillProviderSelect($("provider"))
-                            .catch(function (err) {
-                                console.error(err);
-                                alert("Cannot update list of providers.\nSee log for more details");
-                            })
-                    }, function () {
-                        alert("PIN is not approved");
-                    })
-            })
-            .on("close", function () {
-                isOpen = false;
-            });
+          await FillProviderSelect($("provider"));
 
-        ws.cardReader
+          ws.cardReader
             .on("insert", updateProvider)
             .on("remove", updateProvider);
+        });
+    }
 
-        function updateProvider() {
-            const $provider = $("provider");
-            $provider.innerHTML = "";
-            FillProviderSelect($provider)
-                .catch(function (err) {
-                    console.error(err);
-                    alert("Cannot update list of providers.\nSee log for more details");
-                })
+    async function updateProvider() {
+      const $provider = $("provider");
+      $provider.innerHTML = "";
+      await FillProviderSelect($provider);
+    }
+
+    async function start() {
+      // disabled button
+      $("btn").disabled = true;
+
+      try {
+        const $provider = document.getElementById("provider");
+        const $cert = $("cert");
+
+        if (!$cert.value) {
+          throw new Error("Certificate PEM is empty");
         }
 
-        function start() {
-            if (isOpen) {
-                Promise.resolve()
-                    .then(function () {
-                        // disabled button
-                        $("btn").disabled = true;
-
-                        const $provider = document.getElementById("provider");
-                        const $cert = $("cert");
-
-                        if (!$cert.value) {
-                            throw new Error("Certificate PEM is empty");
-                        }
-
-                        return ws.getCrypto(providerId)
-                            .then(function (crypto) {
-                                if (!crypto) {
-                                    throw new Error("Cannot get provider by id '" + providerId + "'");
-                                }
-                                // Check provider login
-                                return crypto.isLoggedIn()
-                                    .then(function (ok) {
-                                        if (!ok) {
-                                            return ws.challenge()
-                                                .then(function (pin) {
-                                                    // show PIN
-                                                    setTimeout(function () {
-                                                        alert("2key session PIN:" + pin);
-                                                    }, 100)
-                                                    // ask to approve session
-                                                    return ws.login();
-                                                })
-                                                .then(function () {
-                                                    // PIN approved
-                                                }, function () {
-                                                    // PIN refused
-                                                    alert("PIN is not approved");
-                                                })
-                                        }
-                                    })
-                                    .then(function () {
-                                        const der = PemToDer($cert.value);
-
-                                        // get algorithm for key
-                                        // NOTE: pkijs needs crypto engine
-                                        pkijs.setEngine("Fortify", crypto, crypto.subtle);
-                                        var asn1 = asn1js.fromBER(der);
-                                        asn1Cert = new pkijs.Certificate({ schema: asn1.result });
-                                        return asn1Cert.getPublicKey()
-                                            .then(function (key) {
-                                                return crypto.certStorage.importCert("x509", der, key.algorithm, ["verify"])
-                                            })
-                                            .then(function (cert) {
-                                                // Add certificate to storage
-                                                return crypto.certStorage.setItem(cert)
-                                            })
-                                            .then(function (index) {
-                                                alert("Certificate was added successfully");
-                                                console.log("Certificate id:", index);
-                                            })
-                                    })
-                            })
-                    })
-                    .catch(function (err) {
-                        console.error(err);
-                        alert("Cannot import certificate.\nSee log for more details");
-                    })
-                    .then(function () {
-                        $("btn").disabled = false;
-                    });
-            } else {
-                alert("Server is not runned");
-            }
+        const crypto = await ws.getCrypto($provider.value);
+        // Check provider login
+        if (! await crypto.isLoggedIn()) {
+          await crypto.login();
         }
-    </script>
+        const der = PemToDer($cert.value);
+
+        // get algorithm for key
+        // NOTE: pkijs needs crypto engine
+        pkijs.setEngine("Fortify", crypto, crypto.subtle);
+        const asn1 = asn1js.fromBER(der);
+        asn1Cert = new pkijs.Certificate({ schema: asn1.result });
+        const key = await asn1Cert.getPublicKey();
+        const cert = await crypto.certStorage.importCert("raw", der, key.algorithm, ["verify"]);
+        
+        // Add certificate to storage
+        const index = await crypto.certStorage.setItem(cert);
+        alert("Certificate was added successfully");
+        console.log("Certificate id:", index);
+      } finally {
+        $("btn").disabled = false;
+      }
+    }
+
+    main();
+  </script>
 </body>
 
 </html>

@@ -1,3 +1,10 @@
+function errorCallback(e) {
+  alert("Uncaught exception. See console logs for more details.")
+}
+
+self.addEventListener("error", errorCallback);
+self.addEventListener("unhandledrejection", errorCallback);
+
 /**
  * Select element by id
  * 
@@ -5,11 +12,11 @@
  * @returns 
  */
 function $(id) {
-    const result = document.getElementById(id);
-    if (!result) {
-        throw new Error("Cannot get element by id '" + id + "'");
-    }
-    return result;
+  const result = document.getElementById(id);
+  if (!result) {
+    throw new Error("Cannot get element by id '" + id + "'");
+  }
+  return result;
 }
 
 /**
@@ -19,27 +26,33 @@ function $(id) {
  * @param {Element} domSelect
  * @returns 
  */
-function FillProviderSelect(domSelect) {
-    return Promise.resolve()
-        .then(function () {
-            return ws.info()
-                .then(function (info) {
-                    for (let i = 0; i < info.providers.length; i++) {
-                        const provider = info.providers[i];
-                        // TODO: check provider.atr to filter pkcs#11 modules
+async function FillProviderSelect(domSelect) {
+  const info = await ws.info();
+  let first = false;
 
-                        const $option = document.createElement("option");
-                        $option.setAttribute("value", provider.id);
-                        $option.textContent = provider.name;
-                        if (!i) {
-                            // select first item
-                            $option.setAttribute("selected", true);
-                        }
+  if (!info.providers.length) {
+    const $option = document.createElement("option");
+    $option.textContent = "No providers";
+    $option.setAttribute("value", "");
+    $option.setAttribute("disabled", true);
+    $option.setAttribute("selected", true);
+    domSelect.appendChild($option);
+  }
 
-                        domSelect.appendChild($option);
-                    }
-                })
-        })
+  for (const provider of info.providers) {
+    // TODO: check provider.atr to filter pkcs#11 modules
+
+    const $option = document.createElement("option");
+    $option.setAttribute("value", provider.id);
+    $option.textContent = provider.name;
+    if (!first) {
+      // select first item
+      $option.setAttribute("selected", true);
+      first = true;
+    }
+
+    domSelect.appendChild($option);
+  }
 }
 
 /**
@@ -48,99 +61,69 @@ function FillProviderSelect(domSelect) {
  * @param {*} crypto 
  * @param {*} domSelect 
  */
-function fillCertificateSelect(provider, domSelect) {
-    var certIDs, keyIDs;
-    return Promise.resolve()
-        .then(function () {
-            return provider.isLoggedIn()
-                .then(function (ok) {
-                    if (!ok) {
-                        return provider.login()
-                            .catch(function (error) {
-                                alert(error.message);
-                            })
-                    }
-                });
-        })
-        .then(function () {
-            return provider.certStorage.keys()
-        })
-        .then(function (indexes) {
-            certIDs = indexes.filter(function (id) {
-                var parts = id.split("-");
-                return parts[0] === "x509";
-            });
-        })
-        .then(function () {
-            return provider.keyStorage.keys()
-        })
-        .then(function (indexes) {
-            keyIDs = indexes.filter(function (id) {
-                var parts = id.split("-");
-                return parts[0] === "private";
-            })
-        })
-        .then(function () {
-            var promises = [];
-            for (var i = 0; i < certIDs.length; i++) {
-                (function () { // fix scope for promises
-                    var certID = certIDs[i];
-                    for (var j = 0; j < keyIDs.length; j++) {
-                        var keyID = keyIDs[j];
-                        if (keyID.split("-")[2] === certID.split("-")[2]) {
-                            promises.push(
-                                provider.certStorage.getItem(certID)
-                                    .then(function (cert) {
-                                        return {
-                                            id: certID,
-                                            item: cert,
-                                        }
-                                    })
-                                    .catch(function (error) {
-                                        console.error(error);
-                                        return null
-                                    })
-                            );
-                            break;
-                        }
-                    }
-                })();
-            }
-            return Promise.all(promises);
-        })
-        .then(function (certs) {
-            certs = certs.filter(function (item) { return !!item }); // skip 'null' results
+async function fillCertificateSelect(provider, domSelect) {
+  if (! await provider.isLoggedIn()) {
+    await provider.login();
+  }
 
-            domSelect.textContent = "";
+  let certIDs = await provider.certStorage.keys();
+  certIDs = certIDs.filter((id) => {
+    const parts = id.split("-");
+    return parts[0] === "x509";
+  });
 
-            return certs
-                .map(function (cert) {
-                    return {
-                        id: cert.id,
-                        name: GetCommonName(cert.item.subjectName),
-                    }
-                })
-                .sort(function (a, b) {
-                    if (a.name.toLowerCase() > b.name.toLowerCase()) {
-                        return 1;
-                    } else if (a.name.toLowerCase() < b.name.toLowerCase()) {
-                        return -1
-                    }
-                    return 0;
-                })
-                .forEach(function (item, index) {
-                    const $option = document.createElement("option");
-                    $option.setAttribute("value", item.id);
-                    $option.textContent = item.name;
-                    if (!index) {
-                        // select first item
-                        $option.setAttribute("selected", true);
-                    }
+  let keyIDs = await provider.keyStorage.keys()
+  keyIDs = keyIDs.filter(function (id) {
+    const parts = id.split("-");
+    return parts[0] === "private";
+  });
 
-                    domSelect.appendChild($option);
-                })
+  const certs = [];
+  for (const certID of certIDs) {
+    for (const keyID of keyIDs) {
+      if (keyID.split("-")[2] === certID.split("-")[2]) {
+        try {
+          const cert = await provider.certStorage.getItem(certID);
 
-        })
+          certs.push({
+            id: certID,
+            item: cert,
+          });
+        } catch (e) {
+          console.error(`Cannot get certificate ${certID} from CertificateStorage. ${e.message}`);
+        }
+      }
+    }
+  }
+
+  domSelect.textContent = "";
+
+  certs
+    .map((cert) => {
+      return {
+        id: cert.id,
+        name: GetCommonName(cert.item.subjectName),
+      }
+    })
+    .sort((a, b) => {
+      if (a.name.toLowerCase() > b.name.toLowerCase()) {
+        return 1;
+      } else if (a.name.toLowerCase() < b.name.toLowerCase()) {
+        return -1
+      }
+      return 0;
+    })
+    .forEach((item, index) => {
+      const $option = document.createElement("option");
+      $option.setAttribute("value", item.id);
+      $option.textContent = item.name;
+      if (!index) {
+        // select first item
+        $option.setAttribute("selected", true);
+      }
+
+      domSelect.appendChild($option);
+    });
 }
 
 /**
@@ -151,17 +134,17 @@ function fillCertificateSelect(provider, domSelect) {
  * @returns 
  */
 function DerToPem(buffer, name) {
-    let base64 = pvtsutils.Convert.ToBase64(buffer);
+  let base64 = pvtsutils.Convert.ToBase64(buffer);
 
-    const res = [];
-    res.push("-----BEGIN " + name.toUpperCase() + "-----");
-    while (base64.length > 64) {
-        res.push(base64.substr(0, 64))
-        base64 = base64.substr(64);
-    }
-    res.push(base64);
-    res.push("-----END " + name.toUpperCase() + "-----");
-    return res.join("\r\n");
+  const res = [];
+  res.push("-----BEGIN " + name.toUpperCase() + "-----");
+  while (base64.length > 64) {
+    res.push(base64.substr(0, 64))
+    base64 = base64.substr(64);
+  }
+  res.push(base64);
+  res.push("-----END " + name.toUpperCase() + "-----");
+  return res.join("\r\n");
 }
 
 /**
@@ -171,9 +154,9 @@ function DerToPem(buffer, name) {
  * @returns 
  */
 function PemToDer(pemString) {
-    var b64 = pemString.replace(/-----([\w\d\s]+)-----/gi, "").replace(/\n/g, "").replace(/\r/g, "");
-    var der = pvtsutils.Convert.FromBase64(b64);
-    return der;
+  var b64 = pemString.replace(/-----([\w\d\s]+)-----/gi, "").replace(/\n/g, "").replace(/\r/g, "");
+  var der = pvtsutils.Convert.FromBase64(b64);
+  return der;
 }
 
 /**
@@ -183,38 +166,28 @@ function PemToDer(pemString) {
  * @returns 
  */
 function GetCommonName(name) {
-    var reg = /CN=(.+),?/i;
-    var res = reg.exec(name);
-    return res ? res[1] : "Unknown";
+  var reg = /CN=(.+),?/i;
+  var res = reg.exec(name);
+  return res ? res[1] : "Unknown";
 }
 
-function GetCertificateKey(type, provider, certID) {
-    var certID;
-    return Promise.resolve()
-        .then(function () {
-            return provider.keyStorage.keys()
-        })
-        .then(function (keyIDs) {
-            for (var i = 0; i < keyIDs.length; i++) {
-                var keyID = keyIDs[i];
-                var parts = keyID.split("-");
+async function GetCertificateKey(type, provider, certID) {
+  const keyIDs = await provider.keyStorage.keys()
+  for (const keyID of keyIDs) {
+    const parts = keyID.split("-");
 
-                if (parts[0] === type && parts[2] === certID.split("-")[2]) {
-                    return provider.keyStorage.getItem(keyID);
-                }
-            }
-            return null;
-        })
-        .then(function (key) {
-            if (key || type !== "public") {
-                return key;
-            }
-
-            return provider.certStorage.getItem(certID)
-                .then(function(cert) {
-                    return cert.publicKey;
-                });
-        });
+    if (parts[0] === type && parts[2] === certID.split("-")[2]) {
+      const key = await provider.keyStorage.getItem(keyID);
+      if (key) {
+        return key;
+      }
+    }
+  }
+  if (!key && type === "public") {
+    const cert = await provider.certStorage.getItem(certID);
+    return cert.publicKey;
+  }
+  return null;
 }
 
 /**
@@ -223,15 +196,15 @@ function GetCertificateKey(type, provider, certID) {
  * @param {any} name 
  */
 function fixDN(name) {
-    if (name.typesAndValues) {
-        const schema = (new asn1js.Sequence({
-            value: name.typesAndValues.map(function (element) {
-                return new asn1js.Set({
-                    value: [element.toSchema()]
-                })
-            })
-        }));
-        const der = schema.toBER()
-        name.fromSchema(asn1js.fromBER(der).result);
-    }
+  if (name.typesAndValues) {
+    const schema = (new asn1js.Sequence({
+      value: name.typesAndValues.map(function (element) {
+        return new asn1js.Set({
+          value: [element.toSchema()]
+        })
+      })
+    }));
+    const der = schema.toBER()
+    name.fromSchema(asn1js.fromBER(der).result);
+  }
 }

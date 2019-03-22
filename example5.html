@@ -3,207 +3,161 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Example #5</title>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/promise.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/es5-shim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.26.0/polyfill.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/webcrypto-liner.min.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
-    <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
-    <script src="https://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
-    <script src="https://min.gitcdn.link/repo/undoZen/fetch/master/fetch.js"></script>
-    <script src="https://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
-    <script src="src/pvtsutils.js"></script>
-    <script src="src/helper.js"></script>
-    <style>
-        label {
-            display: inline-block;
-            width: 128px;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Example #5</title>
+  <!-- Crypto -->
+  <script src="src/webcrypto-liner.shim.js"></script>
+  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
+  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
 
-        select {
-            display: inline-block;
-            width: 256px;
-        }
+  <!-- Webcrypto Socket -->
+  <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
+  <script src="src/webcrypto-socket.js"></script>
 
-        input[type=text] {
-            display: inline-block;
-            width: 256px;
-        }
+  <!-- Helpers -->
+  <script src="src/pvtsutils.js"></script>
+  <script src="src/asn1.min.js"></script>
+  <script src="src/pki.min.js"></script>
+  <script src="src/helper.js"></script>
+  <style>
+    label {
+      display: inline-block;
+      width: 128px;
+    }
 
-        .group {
-            padding: 8px 16px;
-        }
-    </style>
+    select {
+      display: inline-block;
+      width: 256px;
+    }
+
+    input[type=text] {
+      display: inline-block;
+      width: 256px;
+    }
+
+    .group {
+      padding: 8px 16px;
+    }
+  </style>
 </head>
 
 <body>
-    <h2>Signing with a key via Fortify</h2>
-    <div class="group">
-        <label for="providers">Providers:</label>
-        <select id="providers"></select>
-    </div>
-    <div class="group">
-        <label for="certificates">Certificates:</label>
-        <select id="certificates"></select>
-    </div>
-    <div class="group">
-        <label for="message">Message:</label>
-        <input id="message" type="text" value="Test message"></input>
-    </div>
-    <div class="group">
-        <label for="signature">Signature(HEX):</label>
-        <input id="signature" type="text"></input>
-    </div>
-    <div class="group">
-        <label>Verification:</label>
-        <span id="verification"></span>
-    </div>
-    <div class="group">
-        <button id="sign">Sign</button>
-    </div>
-    <script>
-        var ws = new WebcryptoSocket.SocketProvider();
-        var isOpen = false;
-        ws.connect("127.0.0.1:31337")
-            .on("error", function (e) {
-                console.error(e);
-            })
-            .on("listening", function (e) {
-                // Check if end-to-end session is approved
-                ws.isLoggedIn()
-                    .then(function (ok) {
-                        console.log("Session approved:", ok);
-                        if (!ok) {
-                            return ws.challenge()
-                                .then(function (pin) {
-                                    // show PIN
-                                    setTimeout(function () {
-                                        alert("2key session PIN:" + pin);
-                                    }, 100)
-                                    // ask to approve session
-                                    return ws.login();
-                                });
-                        }
-                    })
-                    .then(function () {
-                        isOpen = true;
+  <h2>Signing with a key via Fortify</h2>
+  <div class="group">
+    <label for="providers">Providers:</label>
+    <select id="providers"></select>
+  </div>
+  <div class="group">
+    <label for="certificates">Certificates:</label>
+    <select id="certificates"></select>
+  </div>
+  <div class="group">
+    <label for="message">Message:</label>
+    <input id="message" type="text" value="Test message"></input>
+  </div>
+  <div class="group">
+    <label for="signature">Signature(HEX):</label>
+    <input id="signature" type="text"></input>
+  </div>
+  <div class="group">
+    <label>Verification:</label>
+    <span id="verification"></span>
+  </div>
+  <div class="group">
+    <button id="sign">Sign</button>
+  </div>
+  <script>
+    async function main() {
+      self.ws = new WebcryptoSocket.SocketProvider({
+        storage: await WebcryptoSocket.BrowserStorage.create(),
+      });
+      ws.connect("127.0.0.1:31337")
+        .on("error", function (e) {
+          console.error(e);
+        })
+        .on("listening", async (e) => {
+          // Check if end-to-end session is approved
+          if (! await ws.isLoggedIn()) {
+            const pin = await ws.challenge();
+            // show PIN
+            setTimeout(() => {
+              alert("2key session PIN:" + pin);
+            }, 100)
+            // ask to approve session
+            await ws.login();
+          }
 
-                        FillData();
-                    }, function () {
-                        alert("PIN is not approved");
-                    })
-            })
-            .on("token", function () {
-                console.log("TOKEN");
-                // update provider list
-            })
-            .on("close", function () {
-                isOpen = false;
-            });
-            
-        ws.cardReader
+          await FillData();
+
+          ws.cardReader
             .on("insert", updateProvider)
             .on("remove", updateProvider);
+        });
+    }
 
-        function updateProvider() {
-            var $providers = document.getElementById("providers");
+    async function updateProvider() {
+      const $providers = document.getElementById("providers");
 
-            $providers.innerHTML = "";
-            FillData();
+      $providers.innerHTML = "";
+      await FillData();
+    }
+
+    async function FillData() {
+      await FillProviderSelect($("providers"));
+      const providerID = $("providers").value;
+      if (providerID) {
+        const crypto = await ws.getCrypto(providerID);
+        fillCertificateSelect(crypto, $("certificates"))
+      }
+    }
+
+    $("providers").onchange = async () => {
+      const providerID = $("providers").value;
+      const provider = await ws.getCrypto(providerID)
+      fillCertificateSelect(provider, $("certificates"))
+    }
+
+    const $sign = $("sign");
+    const $signature = $("signature");
+    const $verification = $("verification");
+
+    $sign.onclick = async () => {
+      $sign.disabled = true;
+
+      try {
+        // Clear fields
+        $signature.value = "";
+        $verification.textContent = "";
+
+        const provider = await ws.getCrypto($("providers").value);
+        const key = await GetCertificateKey("private", provider, $("certificates").value);
+        if (!key) {
+          throw new Error("Certificate doesn't have private key");
         }
 
-        function FillData() {
-            Promise.resolve()
-                .then(function () {
-                    return FillProviderSelect($("providers"))
-                })
-                .then(function () {
-                    var providerID = $("providers").value;
-                    return ws.getCrypto(providerID);
-                })
-                .then(function (provider) {
-                    return fillCertificateSelect(provider, $("certificates"))
-                })
-                .catch(function (err) {
-                    console.error(err);
-                });
-        }
+        const alg = {
+          name: key.algorithm.name,
+          hash: "SHA-256",
+        };
+        const message = pvtsutils.Convert.FromUtf8String($("message").value);
+        const signature = await provider.subtle.sign(alg, key, message);
+        $signature.value = pvtsutils.Convert.ToHex(signature);
+        const publicKey = await GetCertificateKey("public", provider, $("certificates").value);
 
-        $("providers").onchange = function () {
-            Promise.resolve()
-                .then(function () {
-                    var providerID = $("providers").value;
-                    return ws.getCrypto(providerID)
-                })
-                .then(function (provider) {
-                    return fillCertificateSelect(provider, $("certificates"))
-                })
-                .catch(function (err) {
-                    console.error(err);
-                });
-        }
+        const ok = await provider.subtle.verify(alg, publicKey, signature, message);
+        $verification.textContent = ok.toString();
 
-        var $sign = $("sign");
-        var $signature = $("signature");
-        var $verification = $("verification");
+      }
+      finally {
+        $sign.disabled = false;
+      }
 
-        $sign.onclick = function () {
-            var provider;
+    }
 
-            $sign.disabled = true;
-
-            // Clear fields
-            $signature.value = "";
-            $verification.textContent = "";
-
-            Promise.resolve()
-                .then(function () {
-                    var providerID = $("providers").value;
-                    return ws.getCrypto(providerID)
-                })
-                .then(function (crypto) {
-                    provider = crypto;
-                    return GetCertificateKey("private", provider, $("certificates").value);
-                })
-                .then(function (key) {
-                    if (!key) {
-                        throw new Error("Certificate doesn't have private key");
-                    }
-                    console.log(key.algorithm.name);
-                    console.log(key.algorithm.hash ? key.algorithm.hash.name : "none");
-                    console.log(key.usages);
-
-                    var alg = {
-                        name: key.algorithm.name,
-                        hash: "SHA-256",
-                    };
-                    var message = pvtsutils.Convert.FromUtf8String($("message").value);
-                    return provider.subtle.sign(alg, key, message)
-                        .then(function (signature) {
-                            $("signature").value = pvtsutils.Convert.ToHex(signature);
-                            return GetCertificateKey("public", provider, $("certificates").value)
-                                .then(function (publicKey) {
-                                    return provider.subtle.verify(alg, publicKey, signature, message);
-                                })
-                                .then(function (ok) {
-                                    $("verification").textContent = ok.toString();
-                                })
-                        })
-                        .catch(function (err) {
-                            console.error(err);
-                            alert(err.message);
-                        });
-                })
-                .then(function () {
-                    $sign.disabled = false;
-                })
-        }
-    </script>
+    main();
+  </script>
 </body>
 
 </html>

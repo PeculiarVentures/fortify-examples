@@ -2,261 +2,207 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Example #4</title>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/promise.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/es5-shim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.26.0/polyfill.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/webcrypto-liner.min.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
-    <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
-    <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
-    <script src="https://cdn.rawgit.com/jakearchibald/idb/97e4e878/lib/idb.js"></script>
-    <script src="https://min.gitcdn.link/repo/undoZen/fetch/master/fetch.js"></script>
-    <script src="https://peculiarventures.github.io/webcrypto-local/webcrypto-socket.js"></script>
-    <script src="src/asn1.min.js"></script>
-    <script src="src/pki.min.js"></script>
-    <script src="src/pvtsutils.js"></script>
-    <script src="src/helper.js"></script>
-    <style>
-        th {
-            text-align: left;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Example #4</title>
 
-        td {
-            padding: 2px 4px;
-        }
-    </style>
+  <!-- Crypto -->
+  <script src="src/webcrypto-liner.shim.js"></script>
+  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
+  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
+
+  <!-- Webcrypto Socket -->
+  <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
+  <script src="src/webcrypto-socket.js"></script>
+
+  <!-- Helpers -->
+  <script src="src/pvtsutils.js"></script>
+  <script src="src/asn1.min.js"></script>
+  <script src="src/pki.min.js"></script>
+  <script src="src/helper.js"></script>
+  <style>
+    th {
+      text-align: left;
+    }
+
+    td {
+      padding: 2px 4px;
+    }
+  </style>
 </head>
 
 <body>
-    <h2>Enumerate providers and their contents</h2>
-    <p></p>
-    <div>
-        <h3>1: Select provider:</h3>
-        <select name="provider" id="provider" style="width: 300px">
-        </select>
-        <button id="refresh">Refresh</button>
-    </div>
-    <div>
-        <h3>Providers:</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Id</th>
-                    <th>Name</th>
-                    <th>ATR</th>
-                </tr>
-            </thead>
-            <tbody id="providers"></tbody>
-        </table>
-    </div>
-    <div>
-        <h3>Items</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Index</th>
-                    <th>Type</th>
-                    <th>Name</th>
-                </tr>
-            </thead>
-            <tbody id="items"></tbody>
-        </table>
-    </div>
-    <script>
-        var ws = new WebcryptoSocket.SocketProvider();
-        var isOpen = false;
-        ws.connect("127.0.0.1:31337")
-            .on("error", function (e) {
-                console.error(e);
-            })
-            .on("listening", function (e) {
-                // Check if end-to-end session is approved
-                ws.isLoggedIn()
-                    .then(function (ok) {
-                        console.log("Session approved:", ok);
-                        if (!ok) {
-                            return ws.challenge()
-                                .then(function (pin) {
-                                    // show PIN
-                                    setTimeout(function () {
-                                        alert("2key session PIN:" + pin);
-                                    }, 100)
-                                    // ask to approve session
-                                    return ws.login();
-                                });
-                        }
-                    })
-                    .then(function () {
-                        isOpen = true;
+  <h2>Enumerate providers and their contents</h2>
+  <p></p>
+  <div>
+    <h3>1: Select provider:</h3>
+    <select name="provider" id="provider" style="width: 300px">
+    </select>
+    <button id="refresh">Refresh</button>
+  </div>
+  <div>
+    <h3>Providers:</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Id</th>
+          <th>Name</th>
+          <th>ATR</th>
+        </tr>
+      </thead>
+      <tbody id="providers"></tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Items</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Index</th>
+          <th>Type</th>
+          <th>Name</th>
+        </tr>
+      </thead>
+      <tbody id="items"></tbody>
+    </table>
+  </div>
+  <script>
+    async function main() {
+      self.ws = new WebcryptoSocket.SocketProvider({
+        storage: await WebcryptoSocket.BrowserStorage.create(),
+      });
+      ws.connect("127.0.0.1:31337")
+        .on("error", function (e) {
+          console.error(e);
+        })
+        .on("listening", async (e) => {
+          // Check if end-to-end session is approved
+          if (! await ws.isLoggedIn()) {
+            const pin = await ws.challenge();
+            // show PIN
+            setTimeout(() => {
+              alert("2key session PIN:" + pin);
+            }, 100)
+            // ask to approve session
+            await ws.login();
+          }
 
-                        FillProviderSelectEx($("provider"))
-                            .catch(function (err) {
-                                console.error(err);
-                            })
-                        FillProviders();
-                    }, function () {
-                        alert("PIN is not approved");
-                    })
-            })
-            .on("close", function () {
-                isOpen = false;
-            });
+          await FillProviderSelectEx($("provider"));
+          await FillProviders();
 
-        ws.cardReader
+          ws.cardReader
             .on("insert", updateProvider)
             .on("remove", updateProvider);
+        });
+    }
 
-        function updateProvider() {
-            const $provider = $("provider");
-            $provider.innerHTML = "";
-            FillProviderSelectEx($provider)
-                .catch(function (err) {
-                    console.error(err);
-                    alert("Cannot update list of providers.\nSee log for more details");
-                })
-            FillProviders();
+    async function updateProvider() {
+      const $provider = $("provider");
+      $provider.innerHTML = "";
+      await FillProviderSelectEx($provider)
+      await FillProviders();
+    }
+
+    async function FillProviderSelectEx(domSelect) {
+      await FillProviderSelect(domSelect);
+      await FillItems(domSelect.value);
+    }
+
+    async function FillItems(providerId) {
+      const $items = $("items");
+      // clear table items
+      $items.innerHTML = "";
+
+      // get crypto for selected provider
+      const crypto = await ws.getCrypto(providerId);
+      
+      // Check provider login
+      if (! await crypto.isLoggedIn()) {
+        // Request provider for PIN window
+        await crypto.login();
+      }
+
+      // Get certificate items
+      let indexes = await crypto.certStorage.keys();
+
+      for (const index of indexes) {
+        try {
+          const item = await crypto.certStorage.getItem(index);
+          const $raw = CreateRaw(item, index);
+          $items.appendChild($raw);
+        } catch (e) {
+          console.error(`Cannot get ${index} from CertificateStorage`)
+          console.error(e);
         }
+      }
 
-        function FillProviderSelectEx(domSelect) {
-            return FillProviderSelect(domSelect)
-                .then(function () {
-                    return FillItems(domSelect.value);
-                })
+      // Get key items
+      indexes = await crypto.keyStorage.keys();
+
+      for (const index of indexes) {
+        try {
+          const item = await crypto.keyStorage.getItem(index);
+          const $raw = CreateRaw(item, index);
+          $items.appendChild($raw);
+        } catch (e) {
+          console.error(`Cannot get ${index} from KeyStorage`)
+          console.error(e);
         }
+      }
+    }
 
-        function FillItems(providerId) {
-            var $items = $("items");
-            // clear table items
-            $items.innerHTML = "";
+    async function FillProviders() {
+      const $providers = $("providers");
+      $providers.innerHTML = "";
 
-            // get crypto for selected provider
-            return ws.getCrypto(providerId)
-                .then(function (crypto) {
-                    if (!crypto) {
-                        throw new Error("Cannot get provider by id '" + providerId + "'");
-                    }
-                    // Check provider login
-                    return crypto.isLoggedIn()
-                        .then(function (ok) {
-                            if (!ok) {
-                                // Request provider for PIN window
-                                return crypto.login();
-                            }
-                        })
-                        .then(function () {
-                            // Get certificate items
-                            return crypto.certStorage.keys();
-                        })
-                        .then(function (indexes) {
-                            var promises = indexes.map(function (index) {
-                                return crypto.certStorage.getItem(index)
-                                    .then(function (item) {
-                                        var $raw = CreateRaw(item, index);
-                                        $items.appendChild($raw);
-                                    }, function (error) {
-                                        console.error(error);
-                                    });
-                            })
-                            return Promise.all(promises);
-                        })
-                        .then(function () {
-                            // Get key items
-                            return crypto.keyStorage.keys();
-                        })
-                        .then(function (indexes) {
-                            var promises = indexes.map(function (index) {
-                                return crypto.keyStorage.getItem(index)
-                                    .then(function (item) {
-                                        var $raw = CreateRaw(item, index);
-                                        $items.appendChild($raw);
-                                    }, function (error) {
-                                        console.error(error);
-                                    });
-                            })
-                            return Promise.all(promises);
-                        })
-                })
-        }
+      const info = await ws.info();
+      for (const provider of info.providers) {
+        $providers.appendChild(CreateProvidersRaw(provider));
+      }
+    }
 
-        function FillProviders() {
-            return Promise.resolve()
-                .then(function () {
-                    var $providers = $("providers");
-                    $providers.innerHTML = "";
+    function CreateRaw(item, index) {
+      const $tr = document.createElement("tr");
+      $tr.appendChild(CreateCell(index));
+      $tr.appendChild(CreateCell(item.type));
+      switch (item.type) {
+        case "public":
+        case "private":
+          $tr.appendChild(CreateCell(item.algorithm.name));
+          break;
+        case "x509":
+        case "request":
+          $tr.appendChild(CreateCell(GetCommonName(item.subjectName)));
+          break;
+      }
+      return $tr;
+    }
 
-                    return ws.info()
-                        .then(function (info) {
-                            for (var i = 0; i < info.providers.length; i++) {
-                                var provider = info.providers[i];
-                                $providers.appendChild(CreateProvidersRaw(provider));
-                            }
-                        })
-                })
-                .catch(function (error) {
-                    console.error(error);
-                })
-        }
+    function CreateCell(data) {
+      const $td = document.createElement("td");
+      $td.textContent = data;
+      return $td;
+    }
 
-        function CreateRaw(item, index) {
-            var $tr = document.createElement("tr");
-            $tr.appendChild(CreateCell(index));
-            $tr.appendChild(CreateCell(item.type));
-            switch (item.type) {
-                case "public":
-                case "private":
-                    $tr.appendChild(CreateCell(item.algorithm.name));
-                    break;
-                case "x509":
-                case "request":
-                    $tr.appendChild(CreateCell(GetCommonName(item.subjectName)));
-                    break;
-            }
-            return $tr;
-        }
+    function CreateProvidersRaw(item) {
+      const $tr = document.createElement("tr");
+      $tr.appendChild(CreateCell(item.id));
+      $tr.appendChild(CreateCell(item.name));
+      $tr.appendChild(CreateCell(item.atr || "none"));
+      return $tr;
+    }
 
-        function CreateCell(data) {
-            var $td = document.createElement("td");
-            $td.textContent = data;
-            return $td;
-        }
+    $("provider").onchange = () => FillItems($("provider").value);
+    $("refresh").onclick = async () => {
+      // get crypto for selected provider
+      const crypto = await ws.getCrypto($("provider").value);
+      await crypto.reset();
+      await FillItems($("provider").value);
+    }
 
-        function CreateProvidersRaw(item) {
-            var $tr = document.createElement("tr");
-            $tr.appendChild(CreateCell(item.id));
-            $tr.appendChild(CreateCell(item.name));
-            $tr.appendChild(CreateCell(item.atr || "none"));
-            return $tr;
-        }
-
-        $("provider").onchange = function () {
-            FillItems($("provider").value)
-                .catch(function (err) {
-                    console.error(err);
-                    alert("Cannot update list of provider items");
-                })
-        }
-        $("refresh").onclick = function () {
-            // get crypto for selected provider
-            return ws.getCrypto($("provider").value)
-                .then(function (crypto) {
-                    if (!crypto) {
-                        throw new Error("Cannot get provider by id '" + providerId + "'");
-                    }
-                    return crypto.reset();
-                })
-                .then(function () {
-                    return FillItems($("provider").value)
-                })
-                .catch(function (err) {
-                    console.error(err);
-                    alert("Cannot update list of provider items");
-                })
-        }
-    </script>
+    main();
+  </script>
 </body>
 
 </html>
