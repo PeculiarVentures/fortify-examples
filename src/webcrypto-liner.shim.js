@@ -10407,7 +10407,8 @@ var liner = (function (exports) {
         try {
           Debug.info(`Trying to wrap key by using native functions`, args);
           const data = await this.exportKey(args[0], args[1]);
-          const res = await this.encrypt(args[3], args[2], data);
+          const keyData = args[0] === "jwk" ? Convert.FromUtf8String(JSON.stringify(data)) : data;
+          const res = await this.encrypt(args[3], args[2], keyData);
           return res;
         } catch (e) {
           Debug.warn(`Cannot wrap key by native functions. ${e.message}`, e);
@@ -10418,7 +10419,8 @@ var liner = (function (exports) {
         try {
           Debug.info(`Trying to unwrap key by using native functions`, args);
           const data = await this.decrypt(args[3], args[2], args[1]);
-          const res = await this.importKey(args[0], data, args[4], args[5], args[6]);
+          const keyData = args[0] === "jwk" ? JSON.parse(Convert.ToUtf8String(data)) : data;
+          const res = await this.importKey(args[0], keyData, args[4], args[5], args[6]);
           return res;
         } catch (e) {
           Debug.warn(`Cannot unwrap key by native functions. ${e.message}`, e);
