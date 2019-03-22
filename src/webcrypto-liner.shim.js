@@ -35,22 +35,49 @@ var liner = (function (exports) {
     return target;
   }
 
-  if (!Math.imul) {
-    Math.imul = function imul(a, b) {
-      const ah = a >>> 16 & 0xffff;
-      const al = a & 0xffff;
-      const bh = b >>> 16 & 0xffff;
-      const bl = b & 0xffff;
-      return al * bl + (ah * bl + al * bh << 16 >>> 0) | 0;
-    };
+  class Debug {
+    static get enabled() {
+      return typeof self !== "undefined" && self.PV_WEBCRYPTO_LINER_LOG;
+    }
+
+    static log(message, ...optionalParams) {
+      if (this.enabled) {
+        console.log.apply(console, arguments);
+      }
+    }
+
+    static error(message, ...optionalParams) {
+      if (this.enabled) {
+        console.error.apply(console, arguments);
+      }
+    }
+
+    static info(message, ...optionalParams) {
+      if (this.enabled) {
+        console.info.apply(console, arguments);
+      }
+    }
+
+    static warn(message, ...optionalParams) {
+      if (this.enabled) {
+        console.warn.apply(console, arguments);
+      }
+    }
+
+    static trace(message, ...optionalParams) {
+      if (this.enabled) {
+        console.trace.apply(console, arguments);
+      }
+    }
+
   }
 
-  let window$1;
+  let window;
 
   if (typeof self === "undefined") {
     const crypto = require("crypto");
 
-    window$1 = {
+    window = {
       crypto: {
         subtle: {},
         getRandomValues: array => {
@@ -63,10 +90,10 @@ var liner = (function (exports) {
       }
     };
   } else {
-    window$1 = self;
+    window = self;
   }
 
-  const nativeCrypto = window$1.msCrypto || window$1.crypto || {};
+  const nativeCrypto = window.msCrypto || window.crypto || {};
   let nativeSubtle = null;
 
   try {
@@ -74,8 +101,6 @@ var liner = (function (exports) {
   } catch (err) {
     console.warn("Cannot get subtle from crypto", err);
   }
-
-  const nativeCryptoKey = CryptoKey;
   /*! *****************************************************************************
   Copyright (c) Microsoft Corporation. All rights reserved.
   Licensed under the Apache License, Version 2.0 (the "License"); you may not use
@@ -90,6 +115,7 @@ var liner = (function (exports) {
   See the Apache Version 2.0 License for specific language governing permissions
   and limitations under the License.
   ***************************************************************************** */
+
 
   function __decorate(decorators, target, key, desc) {
     var c = arguments.length,
@@ -745,6 +771,15 @@ var liner = (function (exports) {
 
   }
 
+  class AesKwProvider extends AesProvider {
+    constructor() {
+      super(...arguments);
+      this.name = "AES-KW";
+      this.usages = ["wrapKey", "unwrapKey"];
+    }
+
+  }
+
   class DesProvider extends ProviderCrypto {
     constructor() {
       super(...arguments);
@@ -917,7 +952,7 @@ var liner = (function (exports) {
 
   const KEY_TYPES = ["secret", "private", "public"];
 
-  class CryptoKey$1 {
+  class CryptoKey {
     static create(algorithm, type, extractable, usages) {
       const key = new this();
       key.algorithm = algorithm;
@@ -947,7 +982,7 @@ var liner = (function (exports) {
     checkAlgorithmParams(algorithm) {
       this.checkRequiredProperty(algorithm, "public");
 
-      if (!(algorithm.public instanceof CryptoKey$1)) {
+      if (!(algorithm.public instanceof CryptoKey)) {
         throw new TypeError("public: Is not a CryptoKey");
       }
 
@@ -1283,271 +1318,9 @@ var liner = (function (exports) {
     }
 
     checkCryptoKey(key) {
-      if (!(key instanceof CryptoKey$1)) {
+      if (!(key instanceof CryptoKey)) {
         throw new TypeError(`Key is not of type 'CryptoKey'`);
       }
-    }
-
-  }
-
-  function isAlgorithm(algorithm, name) {
-    return algorithm.name.toUpperCase() === name.toUpperCase();
-  }
-
-  class CryptoKey$2 extends CryptoKey$1 {
-    constructor(algorithm, extractable, type, usages) {
-      super();
-      this.extractable = extractable;
-      this.type = type;
-      this.usages = usages;
-      this.algorithm = _objectSpread({}, algorithm);
-    }
-
-  }
-
-  class AesCryptoKey extends CryptoKey$2 {
-    constructor(algorithm, extractable, usages, raw) {
-      super(algorithm, extractable, "secret", usages);
-      this.raw = raw;
-    }
-
-    toJSON() {
-      const jwk = {
-        kty: "oct",
-        alg: this.getJwkAlgorithm(),
-        k: Convert.ToBase64Url(this.raw),
-        ext: this.extractable,
-        key_ops: this.usages
-      };
-      return jwk;
-    }
-
-    getJwkAlgorithm() {
-      switch (this.algorithm.name.toUpperCase()) {
-        case "AES-CBC":
-          return `A${this.algorithm.length}CBC`;
-
-        case "AES-CTR":
-          return `A${this.algorithm.length}CTR`;
-
-        case "AES-GCM":
-          return `A${this.algorithm.length}GCM`;
-
-        case "AES-ECB":
-          return `A${this.algorithm.length}ECB`;
-
-        default:
-          throw new AlgorithmError("Unsupported algorithm name");
-      }
-    }
-
-  }
-
-  class AesCrypto {
-    static checkLib() {
-      if (typeof asmCrypto === "undefined") {
-        throw new OperationError("Cannot implement DES mechanism. Add 'https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js' script to your project");
-      }
-    }
-
-    static checkCryptoKey(key) {
-      if (!(key instanceof AesCryptoKey)) {
-        throw new TypeError("key: Is not AesCryptoKey");
-      }
-    }
-
-    static async generateKey(algorithm, extractable, usages) {
-      this.checkLib();
-      const raw = nativeCrypto.getRandomValues(new Uint8Array(algorithm.length / 8));
-      return new AesCryptoKey(algorithm, extractable, usages, raw);
-    }
-
-    static async encrypt(algorithm, key, data) {
-      return this.cipher(algorithm, key, data, true);
-    }
-
-    static async decrypt(algorithm, key, data) {
-      return this.cipher(algorithm, key, data, false);
-    }
-
-    static async exportKey(format, key) {
-      this.checkLib();
-
-      switch (format) {
-        case "jwk":
-          return key.toJSON();
-
-        case "raw":
-          return key.raw.buffer;
-
-        default:
-          throw new OperationError("format: Must be 'jwk' or 'raw'");
-      }
-    }
-
-    static async importKey(format, keyData, algorithm, extractable, keyUsages) {
-      this.checkLib();
-      let raw;
-
-      if (isJWK(keyData)) {
-        raw = Convert.FromBase64Url(keyData.k);
-      } else {
-        raw = BufferSourceConverter.toArrayBuffer(keyData);
-      }
-
-      switch (raw.byteLength << 3) {
-        case 128:
-        case 192:
-        case 256:
-          break;
-
-        default:
-          throw new OperationError("keyData: Is wrong key length");
-      }
-
-      const key = new AesCryptoKey({
-        name: algorithm.name,
-        length: raw.byteLength << 3
-      }, extractable, keyUsages, new Uint8Array(raw));
-      return key;
-    }
-
-    static async cipher(algorithm, key, data, encrypt) {
-      this.checkLib();
-      const action = encrypt ? "encrypt" : "decrypt";
-      let res;
-
-      if (isAlgorithm(algorithm, AesCrypto.AesCBC)) {
-        const iv = BufferSourceConverter.toArrayBuffer(algorithm.iv);
-        res = asmCrypto.AES_CBC[action](data, key.raw, undefined, iv);
-      } else if (isAlgorithm(algorithm, AesCrypto.AesGCM)) {
-        const iv = BufferSourceConverter.toArrayBuffer(algorithm.iv);
-        let additionalData;
-
-        if (algorithm.additionalData) {
-          additionalData = BufferSourceConverter.toArrayBuffer(algorithm.additionalData);
-        }
-
-        const tagLength = (algorithm.tagLength || 128) / 8;
-        res = asmCrypto.AES_GCM[action](data, key.raw, iv, additionalData, tagLength);
-      } else if (isAlgorithm(algorithm, AesCrypto.AesECB)) {
-        res = asmCrypto.AES_ECB[action](data, key.raw, true);
-      } else {
-        throw new OperationError(`algorithm: Is not recognized`);
-      }
-
-      return res.buffer;
-    }
-
-  }
-
-  AesCrypto.AesCBC = "AES-CBC";
-  AesCrypto.AesECB = "AES-ECB";
-  AesCrypto.AesGCM = "AES-GCM";
-
-  class AesCbcProvider$1 extends AesCbcProvider {
-    async onGenerateKey(algorithm, extractable, keyUsages) {
-      return AesCrypto.generateKey(algorithm, extractable, keyUsages);
-    }
-
-    async onEncrypt(algorithm, key, data) {
-      return AesCrypto.encrypt(algorithm, key, data);
-    }
-
-    async onDecrypt(algorithm, key, data) {
-      return AesCrypto.decrypt(algorithm, key, data);
-    }
-
-    async onExportKey(format, key) {
-      return AesCrypto.exportKey(format, key);
-    }
-
-    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
-      return AesCrypto.importKey(format, keyData, algorithm, extractable, keyUsages);
-    }
-
-    async checkCryptoKey(key, keyUsage) {
-      super.checkCryptoKey(key, keyUsage);
-      AesCrypto.checkCryptoKey(key);
-    }
-
-  }
-
-  class AesEcbProvider$1 extends AesEcbProvider {
-    async onGenerateKey(algorithm, extractable, keyUsages) {
-      return AesCrypto.generateKey(algorithm, extractable, keyUsages);
-    }
-
-    async onEncrypt(algorithm, key, data) {
-      return AesCrypto.encrypt(algorithm, key, data);
-    }
-
-    async onDecrypt(algorithm, key, data) {
-      return AesCrypto.decrypt(algorithm, key, data);
-    }
-
-    async onExportKey(format, key) {
-      return AesCrypto.exportKey(format, key);
-    }
-
-    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
-      return AesCrypto.importKey(format, keyData, algorithm, extractable, keyUsages);
-    }
-
-    async checkCryptoKey(key, keyUsage) {
-      super.checkCryptoKey(key, keyUsage);
-      AesCrypto.checkCryptoKey(key);
-    }
-
-  }
-
-  class AesGcmProvider$1 extends AesGcmProvider {
-    async onGenerateKey(algorithm, extractable, keyUsages) {
-      return AesCrypto.generateKey(algorithm, extractable, keyUsages);
-    }
-
-    async onEncrypt(algorithm, key, data) {
-      return AesCrypto.encrypt(algorithm, key, data);
-    }
-
-    async onDecrypt(algorithm, key, data) {
-      return AesCrypto.decrypt(algorithm, key, data);
-    }
-
-    async onExportKey(format, key) {
-      return AesCrypto.exportKey(format, key);
-    }
-
-    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
-      return AesCrypto.importKey(format, keyData, algorithm, extractable, keyUsages);
-    }
-
-    async checkCryptoKey(key, keyUsage) {
-      super.checkCryptoKey(key, keyUsage);
-      AesCrypto.checkCryptoKey(key);
-    }
-
-  }
-
-  class AesCtrProvider$1 extends AesCtrProvider {
-    async onEncrypt(algorithm, key, data) {
-      throw new Error("Method not implemented.");
-    }
-
-    async onDecrypt(algorithm, key, data) {
-      throw new Error("Method not implemented.");
-    }
-
-    async onGenerateKey(algorithm, extractable, keyUsages) {
-      throw new Error("Method not implemented.");
-    }
-
-    async onExportKey(format, key) {
-      throw new Error("Method not implemented.");
-    }
-
-    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
-      throw new Error("Method not implemented.");
     }
 
   }
@@ -7118,8 +6891,6 @@ var liner = (function (exports) {
     function compareSchema(root, inputData, inputSchema) {
       //region Special case for Choice schema element type
       if (inputSchema instanceof Choice) {
-        const choiceResult = false;
-
         for (let j = 0; j < inputSchema.value.length; j++) {
           const result = compareSchema(root, inputData, inputSchema.value[j]);
 
@@ -7131,7 +6902,7 @@ var liner = (function (exports) {
           }
         }
 
-        if (choiceResult === false) {
+        {
           const _result = {
             verified: false,
             result: {
@@ -8269,81 +8040,6 @@ var liner = (function (exports) {
   var build_26 = build.AsnCharacterStringConverter;
   var build_27 = build.AsnUTCTimeConverter;
   var build_28 = build.AsnGeneralizedTimeConverter;
-  let ObjectIdentifier = class ObjectIdentifier {
-    constructor(value) {
-      if (value) {
-        this.value = value;
-      }
-    }
-
-  };
-
-  __decorate([build_3({
-    type: build_2.ObjectIdentifier
-  })], ObjectIdentifier.prototype, "value", void 0);
-
-  ObjectIdentifier = __decorate([build_4({
-    type: build_1.Choice
-  })], ObjectIdentifier);
-
-  class AlgorithmIdentifier {
-    constructor(params) {
-      Object.assign(this, params);
-    }
-
-  }
-
-  __decorate([build_3({
-    type: build_2.ObjectIdentifier
-  })], AlgorithmIdentifier.prototype, "algorithm", void 0);
-
-  __decorate([build_3({
-    type: build_2.Any,
-    optional: true
-  })], AlgorithmIdentifier.prototype, "parameters", void 0);
-
-  class PrivateKeyInfo {
-    constructor() {
-      this.version = 0;
-      this.privateKeyAlgorithm = new AlgorithmIdentifier();
-      this.privateKey = new ArrayBuffer(0);
-    }
-
-  }
-
-  __decorate([build_3({
-    type: build_2.Integer
-  })], PrivateKeyInfo.prototype, "version", void 0);
-
-  __decorate([build_3({
-    type: AlgorithmIdentifier
-  })], PrivateKeyInfo.prototype, "privateKeyAlgorithm", void 0);
-
-  __decorate([build_3({
-    type: build_2.OctetString
-  })], PrivateKeyInfo.prototype, "privateKey", void 0);
-
-  __decorate([build_3({
-    type: build_2.Any,
-    optional: true
-  })], PrivateKeyInfo.prototype, "attributes", void 0);
-
-  class PublicKeyInfo {
-    constructor() {
-      this.publicKeyAlgorithm = new AlgorithmIdentifier();
-      this.publicKey = new ArrayBuffer(0);
-    }
-
-  }
-
-  __decorate([build_3({
-    type: AlgorithmIdentifier
-  })], PublicKeyInfo.prototype, "publicKeyAlgorithm", void 0);
-
-  __decorate([build_3({
-    type: build_2.BitString
-  })], PublicKeyInfo.prototype, "publicKey", void 0);
-
   var build$1 = createCommonjsModule(function (module, exports) {
     Object.defineProperty(exports, '__esModule', {
       value: true
@@ -8913,10 +8609,130 @@ var liner = (function (exports) {
   var build_2$1 = build$1.JsonSerializer;
   var build_3$1 = build$1.JsonParser;
   var build_4$1 = build$1.JsonProp;
+  let ObjectIdentifier = class ObjectIdentifier {
+    constructor(value) {
+      if (value) {
+        this.value = value;
+      }
+    }
+
+  };
+
+  __decorate([build_3({
+    type: build_2.ObjectIdentifier
+  })], ObjectIdentifier.prototype, "value", void 0);
+
+  ObjectIdentifier = __decorate([build_4({
+    type: build_1.Choice
+  })], ObjectIdentifier);
+
+  class AlgorithmIdentifier {
+    constructor(params) {
+      Object.assign(this, params);
+    }
+
+  }
+
+  __decorate([build_3({
+    type: build_2.ObjectIdentifier
+  })], AlgorithmIdentifier.prototype, "algorithm", void 0);
+
+  __decorate([build_3({
+    type: build_2.Any,
+    optional: true
+  })], AlgorithmIdentifier.prototype, "parameters", void 0);
+
+  class PrivateKeyInfo {
+    constructor() {
+      this.version = 0;
+      this.privateKeyAlgorithm = new AlgorithmIdentifier();
+      this.privateKey = new ArrayBuffer(0);
+    }
+
+  }
+
+  __decorate([build_3({
+    type: build_2.Integer
+  })], PrivateKeyInfo.prototype, "version", void 0);
+
+  __decorate([build_3({
+    type: AlgorithmIdentifier
+  })], PrivateKeyInfo.prototype, "privateKeyAlgorithm", void 0);
+
+  __decorate([build_3({
+    type: build_2.OctetString
+  })], PrivateKeyInfo.prototype, "privateKey", void 0);
+
+  __decorate([build_3({
+    type: build_2.Any,
+    optional: true
+  })], PrivateKeyInfo.prototype, "attributes", void 0);
+
+  class PublicKeyInfo {
+    constructor() {
+      this.publicKeyAlgorithm = new AlgorithmIdentifier();
+      this.publicKey = new ArrayBuffer(0);
+    }
+
+  }
+
+  __decorate([build_3({
+    type: AlgorithmIdentifier
+  })], PublicKeyInfo.prototype, "publicKeyAlgorithm", void 0);
+
+  __decorate([build_3({
+    type: build_2.BitString
+  })], PublicKeyInfo.prototype, "publicKey", void 0);
+
   const JsonBase64UrlArrayBufferConverter = {
     fromJSON: value => Convert.FromBase64Url(value),
     toJSON: value => Convert.ToBase64Url(new Uint8Array(value))
   };
+  var Browser;
+
+  (function (Browser) {
+    Browser["Unknown"] = "Unknown";
+    Browser["IE"] = "Internet Explorer";
+    Browser["Safari"] = "Safari";
+    Browser["Edge"] = "Edge";
+    Browser["Chrome"] = "Chrome";
+    Browser["Firefox"] = "Firefox Mozilla";
+    Browser["Mobile"] = "Mobile";
+  })(Browser || (Browser = {}));
+
+  function BrowserInfo() {
+    const res = {
+      name: Browser.Unknown,
+      version: "0"
+    };
+    const userAgent = self.navigator.userAgent;
+    let reg;
+
+    if (reg = /edge\/([\d\.]+)/i.exec(userAgent)) {
+      res.name = Browser.Edge;
+      res.version = reg[1];
+    } else if (/msie/i.test(userAgent)) {
+      res.name = Browser.IE;
+      res.version = /msie ([\d\.]+)/i.exec(userAgent)[1];
+    } else if (/Trident/i.test(userAgent)) {
+      res.name = Browser.IE;
+      res.version = /rv:([\d\.]+)/i.exec(userAgent)[1];
+    } else if (/chrome/i.test(userAgent)) {
+      res.name = Browser.Chrome;
+      res.version = /chrome\/([\d\.]+)/i.exec(userAgent)[1];
+    } else if (/firefox/i.test(userAgent)) {
+      res.name = Browser.Firefox;
+      res.version = /firefox\/([\d\.]+)/i.exec(userAgent)[1];
+    } else if (/mobile/i.test(userAgent)) {
+      res.name = Browser.Mobile;
+      res.version = /mobile\/([\w]+)/i.exec(userAgent)[1];
+    } else if (/safari/i.test(userAgent)) {
+      res.name = Browser.Safari;
+      res.version = /version\/([\d\.]+)/i.exec(userAgent)[1];
+    }
+
+    return res;
+  }
 
   function concat(...buf) {
     const res = new Uint8Array(buf.map(item => item.length).reduce((prev, cur) => prev + cur));
@@ -9205,7 +9021,292 @@ var liner = (function (exports) {
     converter: AsnIntegerWithoutPaddingConverter
   })], EcDsaSignature.prototype, "s", void 0);
 
-  class RsaCryptoKey extends CryptoKey$2 {
+  class CryptoKey$1 extends CryptoKey {
+    constructor(algorithm, extractable, type, usages) {
+      super();
+      this.extractable = extractable;
+      this.type = type;
+      this.usages = usages;
+      this.algorithm = _objectSpread({}, algorithm);
+    }
+
+  }
+
+  function isAlgorithm(algorithm, name) {
+    return algorithm.name.toUpperCase() === name.toUpperCase();
+  }
+
+  class AesCryptoKey extends CryptoKey$1 {
+    constructor(algorithm, extractable, usages, raw) {
+      super(algorithm, extractable, "secret", usages);
+      this.raw = raw;
+    }
+
+    toJSON() {
+      const jwk = {
+        kty: "oct",
+        alg: this.getJwkAlgorithm(),
+        k: Convert.ToBase64Url(this.raw),
+        ext: this.extractable,
+        key_ops: this.usages
+      };
+      return jwk;
+    }
+
+    getJwkAlgorithm() {
+      switch (this.algorithm.name.toUpperCase()) {
+        case "AES-CBC":
+          return `A${this.algorithm.length}CBC`;
+
+        case "AES-CTR":
+          return `A${this.algorithm.length}CTR`;
+
+        case "AES-GCM":
+          return `A${this.algorithm.length}GCM`;
+
+        case "AES-ECB":
+          return `A${this.algorithm.length}ECB`;
+
+        default:
+          throw new AlgorithmError("Unsupported algorithm name");
+      }
+    }
+
+  }
+
+  class AesCrypto {
+    static checkLib() {
+      if (typeof asmCrypto === "undefined") {
+        throw new OperationError("Cannot implement DES mechanism. Add 'https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js' script to your project");
+      }
+    }
+
+    static checkCryptoKey(key) {
+      if (!(key instanceof AesCryptoKey)) {
+        throw new TypeError("key: Is not AesCryptoKey");
+      }
+    }
+
+    static async generateKey(algorithm, extractable, usages) {
+      this.checkLib();
+      const raw = nativeCrypto.getRandomValues(new Uint8Array(algorithm.length / 8));
+      return new AesCryptoKey(algorithm, extractable, usages, raw);
+    }
+
+    static async encrypt(algorithm, key, data) {
+      return this.cipher(algorithm, key, data, true);
+    }
+
+    static async decrypt(algorithm, key, data) {
+      return this.cipher(algorithm, key, data, false);
+    }
+
+    static async exportKey(format, key) {
+      this.checkLib();
+
+      switch (format) {
+        case "jwk":
+          return key.toJSON();
+
+        case "raw":
+          return key.raw.buffer;
+
+        default:
+          throw new OperationError("format: Must be 'jwk' or 'raw'");
+      }
+    }
+
+    static async importKey(format, keyData, algorithm, extractable, keyUsages) {
+      this.checkLib();
+      let raw;
+
+      if (isJWK(keyData)) {
+        raw = Convert.FromBase64Url(keyData.k);
+      } else {
+        raw = BufferSourceConverter.toArrayBuffer(keyData);
+      }
+
+      switch (raw.byteLength << 3) {
+        case 128:
+        case 192:
+        case 256:
+          break;
+
+        default:
+          throw new OperationError("keyData: Is wrong key length");
+      }
+
+      const key = new AesCryptoKey({
+        name: algorithm.name,
+        length: raw.byteLength << 3
+      }, extractable, keyUsages, new Uint8Array(raw));
+      return key;
+    }
+
+    static async cipher(algorithm, key, data, encrypt) {
+      this.checkLib();
+      const action = encrypt ? "encrypt" : "decrypt";
+      let res;
+
+      if (isAlgorithm(algorithm, AesCrypto.AesCBC)) {
+        const iv = BufferSourceConverter.toArrayBuffer(algorithm.iv);
+        res = asmCrypto.AES_CBC[action](data, key.raw, undefined, iv);
+      } else if (isAlgorithm(algorithm, AesCrypto.AesGCM)) {
+        const iv = BufferSourceConverter.toArrayBuffer(algorithm.iv);
+        let additionalData;
+
+        if (algorithm.additionalData) {
+          additionalData = BufferSourceConverter.toArrayBuffer(algorithm.additionalData);
+        }
+
+        const tagLength = (algorithm.tagLength || 128) / 8;
+        res = asmCrypto.AES_GCM[action](data, key.raw, iv, additionalData, tagLength);
+      } else if (isAlgorithm(algorithm, AesCrypto.AesECB)) {
+        res = asmCrypto.AES_ECB[action](data, key.raw, true);
+      } else {
+        throw new OperationError(`algorithm: Is not recognized`);
+      }
+
+      return res.buffer;
+    }
+
+  }
+
+  AesCrypto.AesCBC = "AES-CBC";
+  AesCrypto.AesECB = "AES-ECB";
+  AesCrypto.AesGCM = "AES-GCM";
+
+  class AesCbcProvider$1 extends AesCbcProvider {
+    async onGenerateKey(algorithm, extractable, keyUsages) {
+      return AesCrypto.generateKey(algorithm, extractable, keyUsages);
+    }
+
+    async onEncrypt(algorithm, key, data) {
+      return AesCrypto.encrypt(algorithm, key, data);
+    }
+
+    async onDecrypt(algorithm, key, data) {
+      return AesCrypto.decrypt(algorithm, key, data);
+    }
+
+    async onExportKey(format, key) {
+      return AesCrypto.exportKey(format, key);
+    }
+
+    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
+      return AesCrypto.importKey(format, keyData, algorithm, extractable, keyUsages);
+    }
+
+    async checkCryptoKey(key, keyUsage) {
+      super.checkCryptoKey(key, keyUsage);
+      AesCrypto.checkCryptoKey(key);
+    }
+
+  }
+
+  class AesEcbProvider$1 extends AesEcbProvider {
+    async onGenerateKey(algorithm, extractable, keyUsages) {
+      return AesCrypto.generateKey(algorithm, extractable, keyUsages);
+    }
+
+    async onEncrypt(algorithm, key, data) {
+      return AesCrypto.encrypt(algorithm, key, data);
+    }
+
+    async onDecrypt(algorithm, key, data) {
+      return AesCrypto.decrypt(algorithm, key, data);
+    }
+
+    async onExportKey(format, key) {
+      return AesCrypto.exportKey(format, key);
+    }
+
+    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
+      return AesCrypto.importKey(format, keyData, algorithm, extractable, keyUsages);
+    }
+
+    async checkCryptoKey(key, keyUsage) {
+      super.checkCryptoKey(key, keyUsage);
+      AesCrypto.checkCryptoKey(key);
+    }
+
+  }
+
+  class AesGcmProvider$1 extends AesGcmProvider {
+    async onGenerateKey(algorithm, extractable, keyUsages) {
+      return AesCrypto.generateKey(algorithm, extractable, keyUsages);
+    }
+
+    async onEncrypt(algorithm, key, data) {
+      return AesCrypto.encrypt(algorithm, key, data);
+    }
+
+    async onDecrypt(algorithm, key, data) {
+      return AesCrypto.decrypt(algorithm, key, data);
+    }
+
+    async onExportKey(format, key) {
+      return AesCrypto.exportKey(format, key);
+    }
+
+    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
+      return AesCrypto.importKey(format, keyData, algorithm, extractable, keyUsages);
+    }
+
+    async checkCryptoKey(key, keyUsage) {
+      super.checkCryptoKey(key, keyUsage);
+      AesCrypto.checkCryptoKey(key);
+    }
+
+  }
+
+  class AesCtrProvider$1 extends AesCtrProvider {
+    async onEncrypt(algorithm, key, data) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onDecrypt(algorithm, key, data) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onGenerateKey(algorithm, extractable, keyUsages) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onExportKey(format, key) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
+      throw new Error("Method not implemented.");
+    }
+
+  }
+
+  class AesKwProvider$1 extends AesKwProvider {
+    async onEncrypt(algorithm, key, data) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onDecrypt(algorithm, key, data) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onGenerateKey(algorithm, extractable, keyUsages) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onExportKey(format, key) {
+      throw new Error("Method not implemented.");
+    }
+
+    async onImportKey(format, keyData, algorithm, extractable, keyUsages) {
+      throw new Error("Method not implemented.");
+    }
+
+  }
+
+  class RsaCryptoKey extends CryptoKey$1 {
     constructor(algorithm, extractable, type, usages, data) {
       super(algorithm, extractable, type, usages);
       this.data = data;
@@ -9566,14 +9667,6 @@ var liner = (function (exports) {
 
   }
 
-  class EcCryptoKey extends CryptoKey$2 {
-    constructor(algorithm, extractable, type, usages, data) {
-      super(algorithm, extractable, type, usages);
-      this.data = data;
-    }
-
-  }
-
   const namedOIDs = {
     "1.2.840.10045.3.1.7": "P-256",
     "P-256": "1.2.840.10045.3.1.7",
@@ -9593,6 +9686,14 @@ var liner = (function (exports) {
     }
 
     return oid;
+  }
+
+  class EcCryptoKey extends CryptoKey$1 {
+    constructor(algorithm, extractable, type, usages, data) {
+      super(algorithm, extractable, type, usages);
+      this.data = data;
+    }
+
   }
 
   class EcCrypto {
@@ -9623,7 +9724,7 @@ var liner = (function (exports) {
     static concat(...buf) {
       const res = new Uint8Array(buf.map(item => item.length).reduce((prev, cur) => prev + cur));
       let offset = 0;
-      buf.forEach((item, index$$1) => {
+      buf.forEach((item, index) => {
         for (let i = 0; i < item.length; i++) {
           res[offset + i] = item[i];
         }
@@ -9981,7 +10082,7 @@ var liner = (function (exports) {
 
   }
 
-  class PbkdfCryptoKey extends CryptoKey$2 {
+  class PbkdfCryptoKey extends CryptoKey$1 {
     constructor(algorithm, extractable, usages, raw) {
       super(algorithm, extractable, "secret", usages);
       this.raw = raw;
@@ -10025,7 +10126,7 @@ var liner = (function (exports) {
 
   }
 
-  class DesCryptoKey extends CryptoKey$2 {
+  class DesCryptoKey extends CryptoKey$1 {
     constructor(algorithm, extractable, usages, raw) {
       super(algorithm, extractable, "secret", usages);
       this.raw = raw;
@@ -10207,50 +10308,15 @@ var liner = (function (exports) {
 
   }
 
-  class Debug {
-    static get enabled() {
-      return typeof self !== "undefined" && self.PV_WEBCRYPTO_LINER_LOG;
-    }
-
-    static log(message, ...optionalParams) {
-      if (this.enabled) {
-        console.log.apply(console, arguments);
-      }
-    }
-
-    static error(message, ...optionalParams) {
-      if (this.enabled) {
-        console.error.apply(console, arguments);
-      }
-    }
-
-    static info(message, ...optionalParams) {
-      if (this.enabled) {
-        console.info.apply(console, arguments);
-      }
-    }
-
-    static warn(message, ...optionalParams) {
-      if (this.enabled) {
-        console.warn.apply(console, arguments);
-      }
-    }
-
-    static trace(message, ...optionalParams) {
-      if (this.enabled) {
-        console.trace.apply(console, arguments);
-      }
-    }
-
-  }
-
   class SubtleCrypto$1 extends SubtleCrypto {
     constructor() {
       super();
+      this.browserInfo = BrowserInfo();
       this.providers.set(new AesCbcProvider$1());
       this.providers.set(new AesCtrProvider$1());
       this.providers.set(new AesEcbProvider$1());
       this.providers.set(new AesGcmProvider$1());
+      this.providers.set(new AesKwProvider$1());
       this.providers.set(new DesCbcProvider());
       this.providers.set(new DesEde3CbcProvider());
       this.providers.set(new RsaSsaProvider$1());
@@ -10269,11 +10335,12 @@ var liner = (function (exports) {
     }
 
     async importKey(...args) {
+      this.fixFirefoxEcImportPkcs8(args);
       return this.wrapNative("importKey", ...args);
     }
 
     async exportKey(...args) {
-      return this.wrapNative("exportKey", ...args);
+      return (await this.fixFirefoxEcExportPkcs8(args)) || (await this.wrapNative("exportKey", ...args));
     }
 
     async generateKey(...args) {
@@ -10313,8 +10380,12 @@ var liner = (function (exports) {
     }
 
     async wrapNative(method, ...args) {
+      if (~["generateKey", "unwrapKey", "deriveKey", "importKey"].indexOf(method)) {
+        this.fixAlgorithmName(args);
+      }
+
       try {
-        if (method !== "digest" || !args.some(a => a instanceof CryptoKey$2)) {
+        if (method !== "digest" || !args.some(a => a instanceof CryptoKey$1)) {
           Debug.info(`Call native '${method}' method`, args);
           const res = await nativeSubtle[method].apply(nativeSubtle, args);
           return res;
@@ -10325,7 +10396,7 @@ var liner = (function (exports) {
 
       if (method === "deriveBits" || method === "deriveKey") {
         for (const arg of args) {
-          if (typeof arg === "object" && arg.public && arg.public instanceof nativeCryptoKey) {
+          if (typeof arg === "object" && arg.public && !(arg.public instanceof CryptoKey$1)) {
             arg.public = await this.castKey(arg.public);
           }
         }
@@ -10334,7 +10405,7 @@ var liner = (function (exports) {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
-        if (arg instanceof nativeCryptoKey) {
+        if (!(arg.public instanceof CryptoKey$1)) {
           args[i] = await this.castKey(arg);
         }
       }
@@ -10354,6 +10425,76 @@ var liner = (function (exports) {
       return provider.importKey("jwk", jwk, key.algorithm, true, key.usages);
     }
 
+    fixAlgorithmName(args) {
+      if (this.browserInfo.name === Browser.Edge) {
+        for (let i = 0; i < args.length; i++) {
+          const arg = args[0];
+
+          if (typeof arg === "string") {
+            for (const algorithm of this.providers.algorithms) {
+              if (algorithm.toLowerCase() === arg.toLowerCase()) {
+                args[i] = algorithm;
+                break;
+              }
+            }
+          } else if (typeof arg === "object" && typeof arg.name === "string") {
+            for (const algorithm of this.providers.algorithms) {
+              if (algorithm.toLowerCase() === arg.name.toLowerCase()) {
+                arg.name = algorithm;
+              }
+
+              if (typeof arg.hash === "string" && algorithm.toLowerCase() === arg.hash.toLowerCase() || typeof arg.hash === "object" && typeof arg.hash.name === "string" && algorithm.toLowerCase() === arg.hash.name.toLowerCase()) {
+                arg.hash = {
+                  name: algorithm
+                };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    fixFirefoxEcImportPkcs8(args) {
+      const preparedAlgorithm = this.prepareAlgorithm(args[2]);
+      const algName = preparedAlgorithm.name.toUpperCase();
+
+      if (this.browserInfo.name === Browser.Firefox && args[0] === "pkcs8" && ~["ECDSA", "ECDH"].indexOf(algName) && ~["P-256", "P-384", "P-521"].indexOf(preparedAlgorithm.namedCurve)) {
+        if (!BufferSourceConverter.isBufferSource(args[1])) {
+          throw new TypeError("data: Is not ArrayBuffer or ArrayBufferView");
+        }
+
+        const preparedData = BufferSourceConverter.toArrayBuffer(args[1]);
+        const keyInfo = build_5.parse(preparedData, PrivateKeyInfo);
+        const privateKey = build_5.parse(keyInfo.privateKey, EcPrivateKey);
+        const jwk = build_2$1.toJSON(privateKey);
+        jwk.ext = true;
+        jwk.key_ops = args[4];
+        jwk.crv = preparedAlgorithm.namedCurve;
+        jwk.kty = "EC";
+        args[0] = "jwk";
+        args[1] = jwk;
+      }
+    }
+
+    async fixFirefoxEcExportPkcs8(args) {
+      try {
+        if (this.browserInfo.name === Browser.Firefox && args[0] === "pkcs8" && ~["ECDSA", "ECDH"].indexOf(args[1].algorithm.name) && ~["P-256", "P-384", "P-521"].indexOf(args[1].algorithm.namedCurve)) {
+          const jwk = await this.exportKey("jwk", args[1]);
+          const ecKey = build_3$1.fromJSON(jwk, {
+            targetSchema: EcPrivateKey
+          });
+          const keyInfo = new PrivateKeyInfo();
+          keyInfo.privateKeyAlgorithm.algorithm = EcCrypto.ASN_ALGORITHM;
+          keyInfo.privateKeyAlgorithm.parameters = build_6.serialize(new ObjectIdentifier(getOidByNamedCurve(args[1].algorithm.namedCurve)));
+          keyInfo.privateKey = build_6.serialize(ecKey);
+          return build_6.serialize(keyInfo);
+        }
+      } catch (err) {
+        Debug.error(err);
+        return null;
+      }
+    }
+
   }
 
   SubtleCrypto$1.methods = ["digest", "importKey", "exportKey", "sign", "verify", "generateKey", "encrypt", "decrypt", "deriveBits", "deriveKey", "wrapKey", "unwrapKey"];
@@ -10370,7 +10511,17 @@ var liner = (function (exports) {
 
   }
 
-  const window$2 = self;
+  if (!Math.imul) {
+    Math.imul = function imul(a, b) {
+      const ah = a >>> 16 & 0xffff;
+      const al = a & 0xffff;
+      const bh = b >>> 16 & 0xffff;
+      const bl = b & 0xffff;
+      return al * bl + (ah * bl + al * bh << 16 >>> 0) | 0;
+    };
+  }
+
+  const window$1 = self;
 
   if (nativeCrypto) {
     Object.freeze(nativeCrypto.getRandomValues);
@@ -10378,13 +10529,13 @@ var liner = (function (exports) {
 
   try {
     delete self.crypto;
-    window$2.crypto = new Crypto$1();
-    Object.freeze(window$2.crypto);
+    window$1.crypto = new Crypto$1();
+    Object.freeze(window$1.crypto);
   } catch (e) {
     Debug.error(e);
   }
 
-  const crypto = window$2.crypto;
+  const crypto = window$1.crypto;
 
   exports.crypto = crypto;
 

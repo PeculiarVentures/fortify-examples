@@ -3315,6 +3315,16 @@ var WebcryptoSocket = (function (exports, protobufjs, fetch, WebSocket) {
 
   }
 
+  class CryptoServerError extends Error {
+    constructor(error) {
+      super(error.message);
+      this.name = "CryptoServerError";
+      this.code = error.code;
+      this.type = error.type;
+    }
+
+  }
+
   class ClientEvent extends Event {}
 
   class ClientCloseEvent extends ClientEvent {
@@ -3517,9 +3527,7 @@ var WebcryptoSocket = (function (exports, protobufjs, fetch, WebSocket) {
 
         if (messageProto.error && messageProto.error.message) {
           const errorProto = messageProto.error;
-          const error = new Error(messageProto.error.message);
-          error.code = errorProto.code;
-          error.type = errorProto.type;
+          const error = new CryptoServerError(errorProto);
           promise.reject(error);
         } else {
           promise.resolve(messageProto.data);
@@ -4874,6 +4882,7 @@ var WebcryptoSocket = (function (exports, protobufjs, fetch, WebSocket) {
   }
 
   exports.BrowserStorage = BrowserStorage;
+  exports.CryptoServerError = CryptoServerError;
   exports.MemoryStorage = MemoryStorage;
   exports.RatchetStorage = RatchetStorage;
   exports.SocketCrypto = SocketCrypto;
