@@ -10330,6 +10330,14 @@ var liner = (function (exports) {
       this.providers.set(new Pbkdf2Provider$1());
     }
 
+    static isAnotherKey(key) {
+      if (typeof key === "object" && typeof key.type === "string" && typeof key.extractable === "boolean" && typeof key.algorithm === "object") {
+        return !(key instanceof CryptoKey$1);
+      }
+
+      return false;
+    }
+
     async digest(...args) {
       return this.wrapNative("digest", ...args);
     }
@@ -10396,7 +10404,7 @@ var liner = (function (exports) {
 
       if (method === "deriveBits" || method === "deriveKey") {
         for (const arg of args) {
-          if (typeof arg === "object" && arg.public && !(arg.public instanceof CryptoKey$1)) {
+          if (typeof arg === "object" && arg.public && SubtleCrypto$1.isAnotherKey(arg.public)) {
             arg.public = await this.castKey(arg.public);
           }
         }
@@ -10405,7 +10413,7 @@ var liner = (function (exports) {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
-        if (!(arg instanceof CryptoKey$1)) {
+        if (SubtleCrypto$1.isAnotherKey(arg)) {
           args[i] = await this.castKey(arg);
         }
       }
