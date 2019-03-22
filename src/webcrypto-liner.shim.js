@@ -10403,6 +10403,39 @@ var liner = (function (exports) {
         Debug.warn(`Error on native '${method}' calling. ${e.message}`, e);
       }
 
+      if (method === "wrapKey") {
+        try {
+          Debug.info(`Trying to wrap key by using native functions`, args);
+          const data = await this.exportKey(args[0], args[1]);
+          const res = await this.encrypt(args[3], args[2], data);
+          return res;
+        } catch (e) {
+          Debug.warn(`Cannot wrap key by native functions. ${e.message}`, e);
+        }
+      }
+
+      if (method === "unwrapKey") {
+        try {
+          Debug.info(`Trying to unwrap key by using native functions`, args);
+          const data = await this.decrypt(args[3], args[2], args[1]);
+          const res = await this.importKey(args[0], data, args[4], args[5], args[6]);
+          return res;
+        } catch (e) {
+          Debug.warn(`Cannot unwrap key by native functions. ${e.message}`, e);
+        }
+      }
+
+      if (method === "deriveKey") {
+        try {
+          Debug.info(`Trying to derive key by using native functions`, args);
+          const data = await this.deriveBits(args[0], args[1], args[2].length);
+          const res = await this.importKey("raw", data, args[2], args[3], args[4]);
+          return res;
+        } catch (e) {
+          Debug.warn(`Cannot derive key by native functions. ${e.message}`, e);
+        }
+      }
+
       if (method === "deriveBits" || method === "deriveKey") {
         for (const arg of args) {
           if (typeof arg === "object" && arg.public && SubtleCrypto$1.isAnotherKey(arg.public)) {
