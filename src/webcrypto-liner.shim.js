@@ -10405,7 +10405,7 @@ var liner = (function (exports) {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
-        if (!(arg.public instanceof CryptoKey$1)) {
+        if (!(arg instanceof CryptoKey$1)) {
           args[i] = await this.castKey(arg);
         }
       }
