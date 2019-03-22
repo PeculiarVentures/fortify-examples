@@ -9707,6 +9707,7 @@ var liner = (function (exports) {
       this.checkLib();
       const key = this.initEcKey(algorithm.namedCurve);
       const ecKey = key.genKeyPair();
+      ecKey.getPublic();
       const prvKey = new EcCryptoKey(_objectSpread({}, algorithm), extractable, "private", keyUsages.filter(usage => ~this.privateUsages.indexOf(usage)), ecKey);
       const pubKey = new EcCryptoKey(_objectSpread({}, algorithm), true, "public", keyUsages.filter(usage => ~this.publicUsages.indexOf(usage)), ecKey);
       return {
