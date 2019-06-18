@@ -183,9 +183,11 @@ async function GetCertificateKey(type, provider, certID) {
       }
     }
   }
-  if (!key && type === "public") {
+  if (type === "public") {
     const cert = await provider.certStorage.getItem(certID);
-    return cert.publicKey;
+    if (cert) {
+      return cert.publicKey;
+    }
   }
   return null;
 }
