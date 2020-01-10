@@ -7,14 +7,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>Example #5</title>
+  <!-- Babel Polyfill -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/7.7.0/polyfill.min.js"></script>
   <!-- Crypto -->
-  <script src="src/webcrypto-liner.shim.js"></script>
-  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/asmcrypto.js"></script>
-  <script src="https://peculiarventures.github.io/pv-webcrypto-tests/src/elliptic.js"></script>
-
-  <!-- Webcrypto Socket -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/asmCrypto/2.3.2/asmcrypto.all.es5.min.js"></script>
+  <script src="https://cdn.rawgit.com/indutny/elliptic/master/dist/elliptic.min.js"></script>
+  <script src="https://unpkg.com/webcrypto-liner@1.1.4/build/webcrypto-liner.shim.min.js"></script>
+  <!-- WebCrypto Socket -->
   <script src="https://cdn.rawgit.com/dcodeIO/protobuf.js/6.8.0/dist/protobuf.js"></script>
-  <script src="src/webcrypto-socket.js"></script>
+  <script src="https://unpkg.com/@webcrypto-local/client@1.0.14/build/webcrypto-socket.min.js"></script>
+  <script>
+    window.PV_WEBCRYPTO_LINER_LOG = true;
+  </script>
 
   <!-- Helpers -->
   <script src="src/pvtsutils.js"></script>
