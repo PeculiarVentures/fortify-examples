@@ -29,7 +29,7 @@
 
   <!-- WebCrypto Socket -->
   <script src="https://fortifyapp.com/external/protobuf/6.8.0/protobuf.min.js"></script>
-  <script src="https://fortifyapp.com/external/webcrypto-local/client/1.1.7/webcrypto-socket.min.js"></script>
+  <script src="https://fortifyapp.com/external/webcrypto-local/client/1.2.0/webcrypto-socket.min.js"></script>
 
   <!-- CMS -->
   <script src="https://fortifyapp.com/external/pvtsutils/pvtsutils.js"></script>
@@ -53,11 +53,12 @@
     <h3>3: Create</h3>
     <button id="btn" onclick="start()">Start</button>
   </div>
-  <script type="module">
+  <script>
     async function main() {
       self.ws = new WebcryptoSocket.SocketProvider({
         storage: await WebcryptoSocket.BrowserStorage.create(),
       });
+
       ws.connect("127.0.0.1:31337")
         .on("error", function (e) {
           console.error(e);
@@ -123,10 +124,13 @@
           type: "2.5.4.6", // Country name
           value: new asn1js.PrintableString({ value: "EN" }),
         }));
+
         const cn = $("cn").value;
+
         if (!cn) {
           throw new Error("CommonName is empty");
         }
+
         request.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
           type: "2.5.4.3", // Common name
           value: new asn1js.BmpString({ value: cn }),
@@ -153,117 +157,6 @@
         const message = "Request was generated successfully.\nIndex of the request is " + requestIndex;
         console.log(message);
         alert(message);
-
-      }
-      finally {
-        $("btn").disabled = false;
-      }
-    }
-
-    main();
-  </script>
-  <script nomodule="">
-    function main() {
-      Promise.resolve
-      self.ws = new WebcryptoSocket.SocketProvider({
-        storage: await WebcryptoSocket.BrowserStorage.create(),
-      });
-      ws.connect("127.0.0.1:31337")
-        .on("error", function (e) {
-          console.error(e);
-        })
-        .on("listening", async (e) => {
-          // Check if end-to-end session is approved
-          if (! await ws.isLoggedIn()) {
-            const pin = await ws.challenge();
-            // show PIN
-            setTimeout(() => {
-              alert("2key session PIN:" + pin);
-            }, 100)
-            // ask to approve session
-            await ws.login();
-          }
-
-          await FillProviderSelect($("provider"));
-
-          ws.cardReader
-            .on("insert", updateProvider)
-            .on("remove", updateProvider);
-        });
-    }
-
-    async function updateProvider() {
-      const $provider = $("provider");
-      $provider.innerHTML = "";
-      await FillProviderSelect($provider);
-    }
-
-    async function start() {
-      // Block button
-      $("btn").disabled = true;
-
-      try {
-        // Get info about allowed providers
-        const providerId = $("provider").value;
-        const crypto = await ws.getCrypto(providerId);
-
-        // Check provider login
-        if (! await crypto.isLoggedIn()) {
-          await crypto.login();
-        }
-
-        // Generate new key pair
-        const alg = {
-          name: "RSASSA-PKCS1-v1_5",
-          hash: "SHA-256",
-          publicExponent: new Uint8Array([1, 0, 1]),
-          modulusLength: 2048,
-        };
-        const keys = await crypto.subtle.generateKey(alg, false, ["sign", "verify"]);
-
-        // Generate new request
-        // NOTE: pkijs needs crypto engine
-        pkijs.setEngine("Fortify", crypto, crypto.subtle);
-
-        const request = new pkijs.CertificationRequest();
-
-        // Fill certificate properties
-        request.version = 0;
-        request.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
-          type: "2.5.4.6", // Country name
-          value: new asn1js.PrintableString({ value: "EN" }),
-        }));
-        const cn = $("cn").value;
-        if (!cn) {
-          throw new Error("CommonName is empty");
-        }
-        request.subject.typesAndValues.push(new pkijs.AttributeTypeAndValue({
-          type: "2.5.4.3", // Common name
-          value: new asn1js.BmpString({ value: cn }),
-        }));
-
-        fixDN(request.subject);
-
-        await request.subjectPublicKeyInfo.importKey(keys.publicKey);
-        await request.sign(keys.privateKey, "SHA-256");
-
-        // Convert request to DER
-        const derRequest = request.toSchema(true).toBER(false);
-        const base64 = DerToPem(derRequest, "CERTIFICATE REQUEST");
-        console.log(base64);
-
-        // import key to crypto
-        const req = await crypto.certStorage.importCert("request", derRequest, alg, ["sign", "verify"]);
-
-        // add keys and request to storage
-        const privateKeyIndex = await crypto.keyStorage.setItem(keys.privateKey);
-        const publicKeyIndex = await crypto.keyStorage.setItem(keys.publicKey);
-        const requestIndex = await crypto.certStorage.setItem(req);
-
-        const message = "Request was generated successfully.\nIndex of the request is " + requestIndex;
-        console.log(message);
-        alert(message);
-
       }
       finally {
         $("btn").disabled = false;
