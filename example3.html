@@ -10,22 +10,14 @@
   <script src="https://fortifyapp.com/external/babel-polyfill/6.26.0/polyfill.min.js"></script>
 
   <!-- Fetch Polyfill -->
-  <script
-    nomodule
-    src="https://fortifyapp.com/external/whatwg-fetch@3.0.0/fetch.umd.js"
-  ></script>
+  <script nomodule src="https://fortifyapp.com/external/whatwg-fetch@3.0.0/fetch.umd.js"></script>
 
   <!-- Crypto Polyfill -->
   <script src="https://fortifyapp.com/external/asmCrypto/2.3.2/asmcrypto.all.es5.min.js"></script>
   <script src="https://fortifyapp.com/external/elliptic/elliptic.min.js"></script>
-  <script
-    type="module"
-    src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.mjs"
-  ></script>
-  <script
-    nomodule
-    src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.js"
-  ></script>
+  <script type="module"
+    src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.mjs"></script>
+  <script nomodule src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.js"></script>
 
   <!-- WebCrypto Socket -->
   <script src="https://fortifyapp.com/external/protobuf/6.8.0/protobuf.min.js"></script>
@@ -59,7 +51,24 @@
   </div>
   <div>
     <h3>3: Create and Import</h3>
-    <button id="btn" onclick="start()">Start</button>
+    <div>
+      <input type="checkbox" id="set-cert" checked>
+      Add certificate to provider
+    </div>
+    <div>
+      <input type="checkbox" id="set-private-key" checked>
+      Add private key to provider
+    </div>
+    <div>
+      <input type="checkbox" id="set-public-key" checked>
+      Add public key to provider
+    </div>
+    <div>
+      <button id="btn" onclick="start()">Start</button>
+    </div>
+  </div>
+  <div>
+    <code id="log" style="white-space: pre-wrap" width="100%" height="200px"></code>
   </div>
   <script>
     async function main() {
@@ -100,6 +109,8 @@
     async function start() {
       // Disable button
       $("btn").disabled = true;
+      const log = $("log");
+      log.innerHTML = "";
 
       try {
         const crypto = await ws.getCrypto($("provider").value)
@@ -174,17 +185,28 @@
         const derCert = certificate.toSchema(true).toBER(false);
         const pem = DerToPem(derCert, "CERTIFICATE");
         console.log(pem);
+        log.textContent = pem;
 
-        // import key to crypto
-        const cert = await crypto.certStorage.importCert("x509", derCert, alg, ["sign", "verify"]);
+        const $setCert = $("set-cert");
+        const $setPrivateKey = $("set-private-key");
+        const $setPublicKey = $("set-public-key");
+        if ($setCert.checked) {
+          // import key to crypto
+          const cert = await crypto.certStorage.importCert("x509", derCert, alg, ["sign", "verify"]);
+          const certIndex = await crypto.certStorage.setItem(cert)
+          log.textContent += `\nCertificate was imported to storage with index: ${certIndex}\n`;
+        }
         // add keys and cert to storage
-        const privateKeyIndex = await crypto.keyStorage.setItem(keys.privateKey)
-        const publicKeyIndex = await crypto.keyStorage.setItem(keys.publicKey)
-        const certIndex = await crypto.certStorage.setItem(cert)
+        if ($setPrivateKey.checked) {
+          const privateKeyIndex = await crypto.keyStorage.setItem(keys.privateKey)
+          log.textContent += `Private key was imported to storage with index: ${privateKeyIndex}\n`;
+        }
+        if ($setPublicKey.checked) {
+          const publicKeyIndex = await crypto.keyStorage.setItem(keys.publicKey)
+          log.textContent += `Public key was imported to storage with index: ${publicKeyIndex}\n`;
+        }
 
-        console.log(privateKeyIndex, publicKeyIndex, certIndex);
-
-        const message = "Certificate was generated successfully.\nIndex of request is " + certIndex;
+        const message = "Certificate was generated successfully.";
         console.log(message);
         alert(message);
       }
