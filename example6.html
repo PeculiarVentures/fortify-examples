@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!-- Data signing/verify -->
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Example #5</title>
+  <!-- Babel Polyfill -->
+  <script src="https://fortifyapp.com/external/babel-polyfill/6.26.0/polyfill.min.js"></script>
+
+  <!-- Fetch Polyfill -->
+  <script nomodule src="https://fortifyapp.com/external/whatwg-fetch@3.0.0/fetch.umd.js"></script>
+
+  <!-- Crypto Polyfill -->
+  <script src="https://fortifyapp.com/external/asmCrypto/2.3.2/asmcrypto.all.es5.min.js"></script>
+  <script src="https://fortifyapp.com/external/elliptic/elliptic.min.js"></script>
+  <script type="module"
+    src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.mjs"></script>
+  <script nomodule src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.js"></script>
+
+  <!-- WebCrypto Socket -->
+  <script src="https://fortifyapp.com/external/protobuf/6.8.0/protobuf.min.js"></script>
+  <script src="https://fortifyapp.com/external/webcrypto-local/client/1.7.1/webcrypto-socket.min.js"></script>
+
+  <!-- CMS -->
+  <script src="https://fortifyapp.com/external/pvtsutils/pvtsutils.js"></script>
+  <script src="https://fortifyapp.com/external/asn1js/asn1.min.js"></script>
+  <script src="https://fortifyapp.com/external/pkijs/pki.min.js"></script>
+  <script src="https://www.unpkg.com/@peculiar/x509@1.9.7/build/x509.js"></script>
+  <script src="src/helper.js"></script>
+  <style>
+    label {
+      display: inline-block;
+      width: 128px;
+    }
+
+    select {
+      display: inline-block;
+      width: 256px;
+    }
+
+    input[type=text] {
+      display: inline-block;
+      width: 256px;
+    }
+
+    .group {
+      padding: 8px 16px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Certificate chain building</h2>
+  <p>
+    Builds a certificate chain for the selected certificate. This example builds extracts certificates from the
+    provider and builds a chain on the client side using <a
+      href="https://github.com/PeculiarVentures/x509/blob/master/README.md">@peculiar/x509</a> library.
+  </p>
+  <div class="group">
+    <label for="providers">Providers:</label>
+    <select id="providers"></select>
+  </div>
+  <div class="group">
+    <label for="certificates">Certificates:</label>
+    <select id="certificates"></select>
+  </div>
+  <div class="group">
+    <button id="build">Build</button>
+  </div>
+  <pre id="chain">
+  </pre>
+  <script>
+    async function main() {
+      self.ws = new WebcryptoSocket.SocketProvider({
+        storage: await WebcryptoSocket.BrowserStorage.create(),
+      });
+      ws.connect("127.0.0.1:31337")
+        .on("error", function (e) {
+          console.error(e);
+        })
+        .on("listening", async (e) => {
+          // Check if end-to-end session is approved
+          if (! await ws.isLoggedIn()) {
+            const pin = await ws.challenge();
+            // show PIN
+            setTimeout(() => {
+              alert("2key session PIN:" + pin);
+            }, 100)
+            // ask to approve session
+            await ws.login();
+          }
+
+          await FillData();
+
+          ws.cardReader
+            .on("insert", updateProvider)
+            .on("remove", updateProvider);
+        });
+    }
+
+    async function updateProvider() {
+      const $providers = document.getElementById("providers");
+
+      $providers.innerHTML = "";
+      await FillData();
+    }
+
+    async function FillData() {
+      await FillProviderSelect($("providers"));
+      const providerID = $("providers").value;
+      if (providerID) {
+        const crypto = await ws.getCrypto(providerID);
+        fillCertificateSelect(crypto, $("certificates"))
+      }
+    }
+
+    $("providers").onchange = async () => {
+      const providerID = $("providers").value;
+      const provider = await ws.getCrypto(providerID)
+      fillCertificateSelect(provider, $("certificates"))
+    }
+
+    const $build = $("build");
+    const $chain = $("chain");
+
+    $build.onclick = async () => {
+      $build.disabled = true;
+
+      try {
+        $chain.textContent = "";
+
+        const provider = await ws.getCrypto($("providers").value);
+
+        // Get all certificate blobs from the provider
+        const certMap = new Map();
+        const certIds = await provider.certStorage.keys();
+        for (const certId of certIds) {
+          const cert = await provider.certStorage.getValue(certId);
+          if (cert) {
+            certMap.set(certId, new x509.X509Certificate(cert));
+          }
+        }
+
+        // Get selected certificate
+        const certId = $('certificates').value;
+        const cert = certMap.get(certId);
+        if (!cert) {
+          throw new Error("Selected certificate not found");
+        }
+
+        // Build certificate chain
+        const chainBuilder = new x509.X509ChainBuilder({
+          certificates: [
+            ...certMap.values(), // add all certificates from the provider
+            // <- add additional certificates if needed
+          ],
+        });
+        const chain = await chainBuilder.build(cert);
+
+        // Print chain
+        const chainStr = [
+          "Certificate chain:",
+          "  Length: " + chain.length,
+          "",
+        ];
+        chain.map((cert, i) => {
+          chainStr.push(`  [${i}]`);
+          chainStr.push(`    Subject: ${cert.subject}`);
+          chainStr.push(`    Issuer: ${cert.issuer}`);
+          chainStr.push(`    Serial: ${cert.serialNumber}`);
+          chainStr.push(`    Validity: ${cert.notBefore.toISOString()} - ${cert.notAfter.toISOString()}`);
+          chainStr.push("");
+        });
+        $chain.textContent = chainStr.join("\n");
+      } catch (e) {
+        console.error(e);
+        $verification.textContent = e.message;
+      }
+      finally {
+        $build.disabled = false;
+      }
+
+    }
+
+    main();
+  </script>
+</body>
+
+</html>
