@@ -144,6 +144,16 @@
           }
         }
 
+        // Log certificates
+        for (const [certId, cert] of certMap) {
+          console.log(`Certificate: ${certId}`);
+          console.log(`  Subject: ${cert.subject}`);
+          console.log(`  Issuer: ${cert.issuer}`);
+          console.log(`  Serial: ${cert.serialNumber}`);
+          console.log(`  Validity: ${cert.notBefore.toISOString()} - ${cert.notAfter.toISOString()}`);
+          console.log(cert.toString('pem'));
+        }
+
         // Get selected certificate
         const certId = $('certificates').value;
         const cert = certMap.get(certId);
