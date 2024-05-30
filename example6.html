@@ -137,9 +137,11 @@
         // Get all certificate blobs from the provider
         const certMap = new Map();
         const certIds = await provider.certStorage.keys();
+        console.log("Certificates IDs:", certIds);
         for (const certId of certIds) {
+          const [type, ,] = certId.split("-");
           const cert = await provider.certStorage.getValue(certId);
-          if (cert) {
+          if (cert && type === "x509") {
             certMap.set(certId, new x509.X509Certificate(cert));
           }
         }
