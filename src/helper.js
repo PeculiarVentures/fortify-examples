@@ -61,7 +61,7 @@ async function FillProviderSelect(domSelect) {
  * @param {*} crypto 
  * @param {*} domSelect 
  */
-async function fillCertificateSelect(provider, domSelect) {
+async function fillCertificateSelect(provider, domSelect, hasKey = true) {
   if (! await provider.isLoggedIn()) {
     await provider.login();
   }
@@ -80,19 +80,19 @@ async function fillCertificateSelect(provider, domSelect) {
 
   const certs = [];
   for (const certID of certIDs) {
-    for (const keyID of keyIDs) {
-      if (keyID.split("-")[2] === certID.split("-")[2]) {
-        try {
-          const cert = await provider.certStorage.getItem(certID);
+    const [, , certId] = certID.split("-");
+    if (hasKey && !keyIDs.some((keyID) => keyID.split("-")[2] === certId)) {
+      continue;
+    }
+    try {
+      const cert = await provider.certStorage.getItem(certID);
 
-          certs.push({
-            id: certID,
-            item: cert,
-          });
-        } catch (e) {
-          console.error(`Cannot get certificate ${certID} from CertificateStorage. ${e.message}`);
-        }
-      }
+      certs.push({
+        id: certID,
+        item: cert,
+      });
+    } catch (e) {
+      console.error(`Cannot get certificate ${certID} from CertificateStorage. ${e.message}`);
     }
   }
 
@@ -171,20 +171,27 @@ function GetCommonName(name) {
   return res ? res[1] : "Unknown";
 }
 
-async function GetCertificateKey(type, provider, certID) {
+async function GetCertificateKey(type, provider, certID, algorithm, extractable, usages) {
   const keyIDs = await provider.keyStorage.keys()
   for (const keyID of keyIDs) {
     const parts = keyID.split("-");
 
     if (parts[0] === type && parts[2] === certID.split("-")[2]) {
-      const key = await provider.keyStorage.getItem(keyID);
+      let key;
+      if (algorithm && extractable !== undefined && usages) {
+        key = await provider.keyStorage.getItem(keyID, algorithm, extractable, usages);
+      } else {
+        key = await provider.keyStorage.getItem(keyID);
+      }
       if (key) {
         return key;
       }
     }
   }
   if (type === "public") {
-    const cert = await provider.certStorage.getItem(certID);
+    const cert = (algorithm && extractable !== undefined && usages)
+      ? await provider.certStorage.getItem(certID, algorithm, extractable, usages)
+      : await provider.certStorage.getItem(certID);
     if (cert) {
       return cert.publicKey;
     }

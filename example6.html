@@ -68,6 +68,10 @@
     <select id="certificates"></select>
   </div>
   <div class="group">
+    <label for="withoutKey">Show certificates without private key</label>
+    <input type="checkbox" id="withoutKey">
+  </div>
+  <div class="group">
     <button id="build">Build</button>
   </div>
   <pre id="chain">
@@ -113,18 +117,29 @@
       const providerID = $("providers").value;
       if (providerID) {
         const crypto = await ws.getCrypto(providerID);
-        fillCertificateSelect(crypto, $("certificates"))
+        fillCertificateSelect(crypto, $certificates, !$withoutKey.checked);
       }
     }
 
     $("providers").onchange = async () => {
       const providerID = $("providers").value;
-      const provider = await ws.getCrypto(providerID)
-      fillCertificateSelect(provider, $("certificates"))
+      const provider = await ws.getCrypto(providerID);
+      fillCertificateSelect(provider, $certificates, !$withoutKey.checked);
     }
 
+    const $providers = $("providers");
     const $build = $("build");
     const $chain = $("chain");
+    const $certificates = $("certificates");
+    const $withoutKey = $("withoutKey");
+
+    $withoutKey.onchange = () => {
+      (async () => {
+        const providerID = $providers.value;
+        const provider = await ws.getCrypto(providerID)
+        fillCertificateSelect(provider, $certificates, !$withoutKey.checked);
+      })();
+    }
 
     $build.onclick = async () => {
       $build.disabled = true;
