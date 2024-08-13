@@ -55,6 +55,11 @@ async function FillProviderSelect(domSelect) {
   }
 }
 
+async function UpdateProvider(provider) {
+  $provider.innerHTML = "";
+  await FillProviderSelect($provider);
+}
+
 /**
  * Generates <option> for given <select> element
  * Gets list of certificate for provider. Shows only certificates which have private key

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<!-- Data signing/verify -->
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Example #7</title>
+  <!-- Babel Polyfill -->
+  <script src="https://fortifyapp.com/external/babel-polyfill/6.26.0/polyfill.min.js"></script>
+
+  <!-- Fetch Polyfill -->
+  <script nomodule src="https://fortifyapp.com/external/whatwg-fetch@3.0.0/fetch.umd.js"></script>
+
+  <!-- Crypto Polyfill -->
+  <script src="https://fortifyapp.com/external/asmCrypto/2.3.2/asmcrypto.all.es5.min.js"></script>
+  <script src="https://fortifyapp.com/external/elliptic/elliptic.min.js"></script>
+  <script type="module"
+    src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.mjs"></script>
+  <script nomodule src="https://fortifyapp.com/external/webcrypto-liner/1.2.3/webcrypto-liner.shim.min.js"></script>
+
+  <!-- WebCrypto Socket -->
+  <script src="https://fortifyapp.com/external/protobuf/6.8.0/protobuf.min.js"></script>
+  <script src="https://fortifyapp.com/external/webcrypto-local/client/1.7.1/webcrypto-socket.min.js"></script>
+
+  <!-- CMS -->
+  <script src="https://fortifyapp.com/external/pvtsutils/pvtsutils.js"></script>
+  <script src="https://fortifyapp.com/external/asn1js/asn1.min.js"></script>
+  <script src="https://fortifyapp.com/external/pkijs/pki.min.js"></script>
+  <script src="https://www.unpkg.com/@peculiar/x509@1.10.1/build/x509.js"></script>
+  <script src="src/helper.js"></script>
+  <style>
+    label {
+      display: inline-block;
+      width: 128px;
+    }
+
+    select {
+      display: inline-block;
+      width: 256px;
+    }
+
+    input[type=text] {
+      display: inline-block;
+      width: 256px;
+    }
+
+    .group {
+      padding: 8px 16px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Encryption</h2>
+  <p>
+    This example demonstrates how to create an RSA key pair and encrypt/decrypt data using the selected RSA type and hash algorithm. 
+    The example uses the RSA 2048-bit key pair to encrypt/decrypt data.
+  </p>
+  <div class="group">
+    <label for="providers">Providers:</label>
+    <select id="providers"></select>
+  </div>
+  <div class="group">
+    <label for="message">Message:</label>
+    <input type="text" id="message" value="Hello, World!" />
+  </div>
+  <div class="group">
+    <label for="rsa-type">RSA Type:</label>
+    <select id="rsa-type">
+      <option value="RSA-OAEP" selected>RSA-OAEP</option>
+      <option value="RSAES-PKCS1-v1_5" disabled>RSAES-PKCS1-v1_5</option>
+    </select>
+  </div>
+  <div class="group">
+    <label for="hash-algorithm">Hash Algorithm:</label>
+    <select id="hash-algorithm">
+      <option value="SHA-1" selected>SHA-1</option>
+      <option value="SHA-256">SHA-256</option>
+      <option value="SHA-384">SHA-384</option>
+      <option value="SHA-512">SHA-512</option>
+    </select>
+  </div>
+  <div class="group">
+    <input type="button" value="Run" onclick="run()" />
+  </div>
+    
+  <pre id="log">
+  </pre>
+  <script>
+    const $providers = $("providers");
+    const $rsaType = $("rsa-type");
+    const $hashAlgorithm = $("hash-algorithm");
+    const $message = $("message");
+
+    function writeLog(text) {
+      const $log = $("log");
+      $log.textContent += text + "\n";
+    }
+
+    function clearLog() {
+      const $log = $("log");
+      $log.textContent = "";
+    }
+
+    async function main() {
+      self.ws = new WebcryptoSocket.SocketProvider({
+        storage: await WebcryptoSocket.BrowserStorage.create(),
+      });
+      ws.connect("127.0.0.1:31337")
+        .on("error", function (e) {
+          console.error(e);
+        })
+        .on("listening", async (e) => {
+          // Check if end-to-end session is approved
+          if (! await ws.isLoggedIn()) {
+            const pin = await ws.challenge();
+            // show PIN
+            setTimeout(() => {
+              alert("2key session PIN:" + pin);
+            }, 100)
+            // ask to approve session
+            await ws.login();
+          }
+
+          await FillProviderSelect($providers);
+
+          ws.cardReader
+            .on("insert", UpdateProvider.bind(null, $providers))
+            .on("remove", UpdateProvider.bind(null, $providers));
+        });
+    }
+
+    async function run() {
+      clearLog();
+
+      const providerId = $providers.value;
+      const provider = await ws.getCrypto(providerId);
+
+      // Check provider login
+      if (! await provider.isLoggedIn()) {
+        await provider.login();
+      }
+
+      // Generate RSA key pair
+      const keyPair = await provider.subtle.generateKey(
+        {
+          name: $rsaType.value,
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+          hash: $hashAlgorithm.value,
+        },
+        false,
+        ["encrypt", "decrypt"],
+      );
+      writeLog(`${keyPair.publicKey.algorithm.name} key pair has been generated`);
+
+      // Encrypt data
+      const data = pvtsutils.Convert.FromUtf8String($message.value);
+      const encrypted = await provider.subtle.encrypt(
+        {
+          name: $rsaType.value,
+        },
+        keyPair.publicKey,
+        data,
+      );
+      writeLog("Data has been encrypted");
+      writeLog("Encrypted data: " + pvtsutils.Convert.ToHex(encrypted));
+
+      // Decrypt data
+      const decrypted = await provider.subtle.decrypt(
+        {
+          name: $rsaType.value,
+        },
+        keyPair.privateKey,
+        encrypted,
+      );
+      writeLog("Data has been decrypted");
+      writeLog("Decrypted data: " + pvtsutils.Convert.ToUtf8String(decrypted));
+    }
+
+    main()
+      .catch(console.error);
+  </script>
+</body>
+
+</html>
