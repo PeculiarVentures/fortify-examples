@@ -82,6 +82,10 @@
     <span id="verification"></span>
   </div>
   <div class="group">
+    <label>WebCrypto:</label>
+    <span id="verification2"></span>
+  </div>
+  <div class="group">
     <button id="sign">Sign</button>
   </div>
   <script>
@@ -138,6 +142,7 @@
     const $sign = $("sign");
     const $signature = $("signature");
     const $verification = $("verification");
+    const $verification2 = $("verification2");
 
     $sign.onclick = async () => {
       $sign.disabled = true;
@@ -162,9 +167,15 @@
         $signature.value = pvtsutils.Convert.ToHex(signature);
         const publicKey = await GetCertificateKey("public", provider, $("certificates").value);
 
+        console.log(publicKey);
+        const spki = await provider.subtle.exportKey("spki", publicKey);
+        const publicKey2 = await crypto.subtle.importKey("spki", spki, publicKey.algorithm, true, ["verify"]);
+
         const ok = await provider.subtle.verify(alg, publicKey, signature, message);
         $verification.textContent = ok.toString();
 
+        const ok2 = await crypto.subtle.verify(alg, publicKey2, signature, message);
+        $verification2.textContent = ok2.toString();
       }
       finally {
         $sign.disabled = false;
