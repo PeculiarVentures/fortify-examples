@@ -103,6 +103,7 @@ async function fillCertificateSelect(provider, domSelect, hasKey = true) {
 
   domSelect.textContent = "";
 
+  let selectedID = "";
   certs
     .map((cert) => {
       return {
@@ -125,10 +126,14 @@ async function fillCertificateSelect(provider, domSelect, hasKey = true) {
       if (!index) {
         // select first item
         $option.setAttribute("selected", true);
+        selectedID = item.id;
       }
 
       domSelect.appendChild($option);
     });
+  if (selectedID) {
+    domSelect.dispatchEvent(new Event("change"));
+  }
 }
 
 /**
