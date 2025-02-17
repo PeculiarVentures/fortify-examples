@@ -69,6 +69,13 @@
     <label for="certificates">Certificates:</label>
     <select id="certificates"></select>
   </div>
+  <div class="group" id="sig-mode-container" style="display:none">
+    <label for="sig-mode">Signature Mode:</label>
+    <select id="sig-mode">
+      <option value="PKCS1">PKCS1 (default)</option>
+      <option value="PSS">PSS</option>
+    </select>
+  </div>
   <div class="group">
     <label for="message">Message:</label>
     <input id="message" type="text" value="Test message"></input>
@@ -88,7 +95,14 @@
   <div class="group">
     <button id="sign">Sign</button>
   </div>
+  <div>
+    <code>
+      <pre id="log"></pre>
+    </code>
+  </div>
   <script>
+    let providers = [];
+
     async function main() {
       self.ws = new WebcryptoSocket.SocketProvider({
         storage: await WebcryptoSocket.BrowserStorage.create(),
@@ -131,6 +145,9 @@
         const crypto = await ws.getCrypto(providerID);
         fillCertificateSelect(crypto, $("certificates"))
       }
+
+      const info = await self.ws.info();
+      providers = [...info.providers];
     }
 
     $("providers").onchange = async () => {
@@ -140,9 +157,88 @@
     }
 
     const $sign = $("sign");
+    const $certificates = $("certificates");
+    const $message = $("message");
     const $signature = $("signature");
     const $verification = $("verification");
     const $verification2 = $("verification2");
+    const $log = $("log");
+
+    const logWrite = (text) => {
+      $log.textContent += text + "\n";
+    }
+
+    const logClear = () => {
+      $log.textContent = "";
+    }
+
+    $certificates.addEventListener("change", async () => {
+      try {
+        const provider = await ws.getCrypto($("providers").value);
+        const key = await GetCertificateKey("private", provider, $certificates.value);
+        
+        if(key && key.algorithm.name.startsWith("RSA")){
+          const selectedProvider = providers.find(p => p.id === $("providers").value);
+          // Filter supported RSA algorithms in the order they appear
+          const allowed = [];
+          if(selectedProvider.algorithms.includes("RSASSA-PKCS1-v1_5")){
+            allowed.push("RSASSA-PKCS1-v1_5");
+          }
+          if(selectedProvider.algorithms.includes("RSA-PSS")){
+            allowed.push("RSA-PSS");
+          }
+          // Clear and repopulate the selector options
+          $("sig-mode").innerHTML = "";
+          allowed.forEach((alg) => {
+            const opt = document.createElement("option");
+            if(alg === "RSASSA-PKCS1-v1_5"){
+              opt.value = "RSASSA-PKCS1-v1_5";
+              opt.textContent = "PKCS1";
+            } else {
+              opt.value = "RSA-PSS";
+              opt.textContent = "PSS";
+            }
+            $("sig-mode").appendChild(opt);
+          });
+          $("sig-mode-container").style.display = "block";
+        } else {
+          $("sig-mode-container").style.display = "none";
+        }
+        
+        const certificate = await provider.certStorage.getItem($certificates.value);
+
+        logClear();
+
+        const logMessage = [];
+        logMessage.push('Certificate:');
+        logMessage.push(`  Subject: ${certificate.subjectName}`);
+        logMessage.push(`  Issuer: ${certificate.issuerName}`);
+        logMessage.push(`  Not before: ${certificate.notBefore}`);
+        logMessage.push(`  Not after: ${certificate.notAfter}`);
+
+        let algName = key.algorithm.name;
+        if (algName.startsWith("RSA")) {
+          algName += ` (${key.algorithm.modulusLength} bits)`;
+        } else if (algName.startsWith("EC")) {
+          algName += ` (${key.algorithm.namedCurve})`;
+        }
+
+        logMessage.push('');
+
+        logMessage.push('Private key:');
+        logMessage.push(`  Algorithm: ${algName}`);
+        logMessage.push(`  Extractable: ${key.extractable}`);
+        logMessage.push(`  label: ${key.algorithm.label}`);
+        logMessage.push(`  Sensitive: ${key.algorithm.sensitive}`);
+
+        logWrite(logMessage.join('\n'));
+
+      } catch (e) {
+        alert('Error while getting certificate and key. See console for more details');
+        logWrite(`Error: ${e.message}`);
+        console.error(e);
+      }
+    });
 
     $sign.onclick = async () => {
       $sign.disabled = true;
@@ -153,21 +249,35 @@
         $verification.textContent = "";
 
         const provider = await ws.getCrypto($("providers").value);
-        const key = await GetCertificateKey("private", provider, $("certificates").value);
+        let key = await GetCertificateKey("private", provider, $("certificates").value);
         if (!key) {
           throw new Error("Certificate doesn't have private key");
         }
 
-        const alg = {
-          name: key.algorithm.name,
-          hash: "SHA-256",
-        };
+        // Determine signing algorithm; choose based on selector for RSA
+        let alg = {};
+        if(key.algorithm.name.startsWith("RSA")){
+          const mode = $("sig-mode").value;
+          if(mode === "RSA-PSS"){
+            alg = { name: "RSA-PSS", hash: "SHA-256", saltLength: 32 };
+          } else {
+            alg = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
+          }
+          // Get the same key but with the specified algorithm
+          const keyIndex = await provider.keyStorage.indexOf(key);
+          key = await provider.keyStorage.getItem(keyIndex, alg, false, ["sign"]);
+        } else {
+          alg = { name: key.algorithm.name, hash: "SHA-256" };
+        }
+
+        logWrite("");
+        logWrite(`Signing with ${alg.name} algorithm`);
+
         const message = pvtsutils.Convert.FromUtf8String($("message").value);
         const signature = await provider.subtle.sign(alg, key, message);
         $signature.value = pvtsutils.Convert.ToHex(signature);
-        const publicKey = await GetCertificateKey("public", provider, $("certificates").value);
+        const publicKey = await GetCertificateKey("public", provider, $("certificates").value, alg, true, ["verify"]);
 
-        console.log(publicKey);
         const spki = await provider.subtle.exportKey("spki", publicKey);
         const publicKey2 = await crypto.subtle.importKey("spki", spki, publicKey.algorithm, true, ["verify"]);
 
